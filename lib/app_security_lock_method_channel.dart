@@ -58,8 +58,32 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
   }
 
   @override
-  Future<void> init() {
-    return methodChannel.invokeMethod('init');
+  Future<void> init({
+    bool? isFaceIDEnabled,
+    bool? isPasscodeEnabled,
+    bool? isScreenLockEnabled,
+    bool? isBackgroundLockEnabled,
+    double? backgroundTimeout,
+  }) {
+    final Map<String, dynamic> arguments = {};
+
+    if (isFaceIDEnabled != null) {
+      arguments['isFaceIDEnabled'] = isFaceIDEnabled;
+    }
+    if (isPasscodeEnabled != null) {
+      arguments['isPasscodeEnabled'] = isPasscodeEnabled;
+    }
+    if (isScreenLockEnabled != null) {
+      arguments['isScreenLockEnabled'] = isScreenLockEnabled;
+    }
+    if (isBackgroundLockEnabled != null) {
+      arguments['isBackgroundLockEnabled'] = isBackgroundLockEnabled;
+    }
+    if (backgroundTimeout != null) {
+      arguments['backgroundTimeout'] = backgroundTimeout;
+    }
+    return methodChannel.invokeMethod(
+        'init', arguments.isEmpty ? null : arguments);
   }
 
   @override
@@ -100,9 +124,21 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
   }
 
   @override
+  Future<void> setBackgroundLockEnabled(bool enabled) {
+    return methodChannel
+        .invokeMethod('setBackgroundLockEnabled', {'enabled': enabled});
+  }
+
+  @override
   Future<void> setBackgroundTimeout(double timeoutSeconds) {
     return methodChannel
         .invokeMethod('setBackgroundTimeout', {'timeout': timeoutSeconds});
+  }
+
+  @override
+  Future<void> setScreenLockEnabled(bool enabled) {
+    return methodChannel
+        .invokeMethod('setScreenLockEnabled', {'enabled': enabled});
   }
 
   @override

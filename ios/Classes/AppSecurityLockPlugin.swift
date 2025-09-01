@@ -13,6 +13,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     private var isPasscodeEnabled = false
     // 是否开启锁屏锁定
     private var isScreenLockEnabled = false
+
+    // 是否开启后台锁定
+    private var isBackgroundLockEnabled = false
     // 标记是否已经开始监听
     private var isListening = false
     // 后台超时时间（秒）
@@ -41,6 +44,29 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             if !isListening {
                 startListen()
             }
+
+            // 处理初始化参数
+            if let args = call.arguments as? [String: Any] {
+                if let faceIDEnabled = args["isFaceIDEnabled"] as? Bool {
+                    isFaceIDEnabled = faceIDEnabled
+                }
+                if let passcodeEnabled = args["isPasscodeEnabled"] as? Bool {
+                    isPasscodeEnabled = passcodeEnabled
+                }
+                if let screenLockEnabled = args["isScreenLockEnabled"] as? Bool {
+                    isScreenLockEnabled = screenLockEnabled
+                }
+                if let backgroundLockEnabled = args["isBackgroundLockEnabled"] as? Bool {
+                    isBackgroundLockEnabled = backgroundLockEnabled
+                }
+                if let timeout = args["backgroundTimeout"] as? Double {
+                    backgroundTimeout = timeout
+                }
+            }
+            print(
+                "Flutter: 初始化参数 - isFaceIDEnabled: \(isFaceIDEnabled), isPasscodeEnabled: \(isPasscodeEnabled), isScreenLockEnabled: \(isScreenLockEnabled), isBackgroundLockEnabled: \(isBackgroundLockEnabled), backgroundTimeout: \(backgroundTimeout)"
+            )
+
             result(nil)
         case "setLockEnabled":
             if let args = call.arguments as? [String: Any],
@@ -71,6 +97,30 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                 let enabled = args["enabled"] as? Bool
             {
                 isPasscodeEnabled = enabled
+                result(nil)
+            } else {
+                result(
+                    FlutterError(
+                        code: "INVALID_ARGUMENT", message: "Missing enabled parameter", details: nil
+                    ))
+            }
+        case "setScreenLockEnabled":
+            if let args = call.arguments as? [String: Any],
+                let enabled = args["enabled"] as? Bool
+            {
+                isScreenLockEnabled = enabled
+                result(nil)
+            } else {
+                result(
+                    FlutterError(
+                        code: "INVALID_ARGUMENT", message: "Missing enabled parameter", details: nil
+                    ))
+            }
+        case "setBackgroundLockEnabled":
+            if let args = call.arguments as? [String: Any],
+                let enabled = args["enabled"] as? Bool
+            {
+                isBackgroundLockEnabled = enabled
                 result(nil)
             } else {
                 result(
@@ -137,9 +187,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     @objc private func onEnterForeground() {
         print("App 进入前台")
         // 停止亮度检测，因为应用已进入前台
-        stopBrightnessDetection()
-        // 停止后台超时任务
-        stopBackgroundTimeoutTimer()
+        stopAllTimers()
         lifecycleChannel?.invokeMethod("onEnterForeground", arguments: nil)
         if isLocked {
             // 调用生物识别
@@ -298,9 +346,11 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         stopBrightnessDetection()
 
         print("AppSecurityLock: Starting brightness detection")
-        brightnessTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) {
-            [weak self] _ in
-            self?.checkScreenBrightness()
+        if isScreenLockEnabled {
+            brightnessTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) {
+                [weak self] _ in
+                self?.checkScreenBrightness()
+            }
         }
     }
 
@@ -351,15 +401,15 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
 
         print(
             "AppSecurityLock: Starting background timeout timer with \(backgroundTimeout) seconds")
-        backgroundTimeoutTimer = Timer.scheduledTimer(
-            withTimeInterval: backgroundTimeout, repeats: false
-        ) {
-            [weak self] _ in
-            self?.handleBackgroundTimeout()
+        if isBackgroundLockEnabled {
+            backgroundTimeoutTimer = Timer.scheduledTimer(
+                withTimeInterval: backgroundTimeout, repeats: false
+            ) {
+                [weak self] _ in
+                self?.handleBackgroundTimeout()
+            }
         }
-    }
-
-    // 后台超时任务
+    }  // 后台超时任务
     private func handleBackgroundTimeout() {
         print("AppSecurityLock: Background timeout occurred")
         // 处理后台超时逻辑

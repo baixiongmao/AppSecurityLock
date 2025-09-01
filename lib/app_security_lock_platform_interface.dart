@@ -32,7 +32,13 @@ abstract class AppSecurityLockPlatform extends PlatformInterface {
     throw UnimplementedError('platformVersion() has not been implemented.');
   }
 
-  Future<void> init() {
+  Future<void> init({
+    bool? isFaceIDEnabled,
+    bool? isPasscodeEnabled,
+    bool? isScreenLockEnabled,
+    bool? isBackgroundLockEnabled,
+    double? backgroundTimeout,
+  }) {
     throw UnimplementedError('init() has not been implemented.');
   }
 
@@ -102,5 +108,15 @@ abstract class AppSecurityLockPlatform extends PlatformInterface {
   void setOnAuthenticationCallback(AuthenticationCallback? callback) {
     throw UnimplementedError(
         'setOnAuthenticationCallback() has not been implemented.');
+  }
+
+  void setBackgroundLockEnabled(bool enabled) {
+    throw UnimplementedError(
+        'setBackgroundLockEnabled() has not been implemented.');
+  }
+
+  void setScreenLockEnabled(bool enabled) {
+    throw UnimplementedError(
+        'setScreenLockEnabled() has not been implemented.');
   }
 }

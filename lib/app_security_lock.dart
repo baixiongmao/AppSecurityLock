@@ -12,8 +12,27 @@ class AppSecurityLock {
     return AppSecurityLockPlatform.instance.getPlatformVersion();
   }
 
-  Future<void> init() {
-    return AppSecurityLockPlatform.instance.init();
+  /// 初始化插件
+  /// [isFaceIDEnabled] 是否启用面容ID/指纹识别
+  /// [isPasscodeEnabled] 是否启用密码解锁
+  /// [isScreenLockEnabled] 是否启用屏幕锁定检测
+  /// [isBackgroundLockEnabled] 是否启用后台锁定
+  /// [backgroundTimeout] 后台超时时间（秒）
+  ///
+  Future<void> init({
+    bool? isFaceIDEnabled,
+    bool? isPasscodeEnabled,
+    bool? isScreenLockEnabled,
+    bool? isBackgroundLockEnabled,
+    double? backgroundTimeout,
+  }) {
+    return AppSecurityLockPlatform.instance.init(
+      isFaceIDEnabled: isFaceIDEnabled,
+      isPasscodeEnabled: isPasscodeEnabled,
+      isScreenLockEnabled: isScreenLockEnabled,
+      isBackgroundLockEnabled: isBackgroundLockEnabled,
+      backgroundTimeout: backgroundTimeout,
+    );
   }
 
   /// 设置应用进入前台时的回调函数
@@ -74,5 +93,13 @@ class AppSecurityLock {
 
   void setOnAppUnlockedCallback(AppUnlockedCallback? callback) {
     AppSecurityLockPlatform.instance.setOnAppUnlockedCallback(callback);
+  }
+
+  void setBackgroundLockEnabled(bool enabled) {
+    AppSecurityLockPlatform.instance.setBackgroundLockEnabled(enabled);
+  }
+
+  void setScreenLockEnabled(bool enabled) {
+    AppSecurityLockPlatform.instance.setScreenLockEnabled(enabled);
   }
 }

@@ -17,11 +17,13 @@ class _MyAppState extends State<MyApp> {
 
   String _biometricType = '检测中...';
   bool _isBiometricAvailable = false;
-  bool _isLockEnabled = false;
+  bool _isLockEnabled = true; // 默认启用安全锁
   bool _isFaceIDEnabled = false;
-  bool _isPasscodeEnabled = true;
+  bool _isPasscodeEnabled = true; // 默认启用密码解锁
   String _lastAuthResult = '暂无';
   double _backgroundTimeout = 60.0; // 默认60秒
+  bool _isBackgroundLockEnabled = false;
+  bool _isScreenLockEnabled = false;
 
   @override
   void initState() {
@@ -49,8 +51,14 @@ class _MyAppState extends State<MyApp> {
       print('Flutter: 应用进入后台');
     });
 
-    // 初始化插件
-    _appSecurityLockPlugin.init();
+    // 初始化插件，使用配置参数
+    _appSecurityLockPlugin.init(
+      isFaceIDEnabled: _isFaceIDEnabled,
+      isPasscodeEnabled: _isPasscodeEnabled,
+      isScreenLockEnabled: _isScreenLockEnabled, // 启用屏幕锁定检测
+      isBackgroundLockEnabled: _isBackgroundLockEnabled,
+      backgroundTimeout: _backgroundTimeout,
+    );
   }
 
   // 设置认证回调
@@ -106,6 +114,21 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  // 重新初始化插件配置
+  Future<void> reinitializePlugin() async {
+    try {
+      await _appSecurityLockPlugin.init(
+        isFaceIDEnabled: _isFaceIDEnabled,
+        isPasscodeEnabled: _isPasscodeEnabled,
+        isScreenLockEnabled: _isScreenLockEnabled,
+        isBackgroundLockEnabled: _isBackgroundLockEnabled,
+        backgroundTimeout: _backgroundTimeout,
+      );
+    } catch (e) {
+      print('重新初始化插件失败: $e');
+    }
+  }
+
   // 测试生物识别
   Future<void> testBiometric() async {
     try {
@@ -130,8 +153,7 @@ class _MyAppState extends State<MyApp> {
         ),
         body: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: ListView(
             children: [
               // 生物识别信息
               Card(
@@ -155,45 +177,84 @@ class _MyAppState extends State<MyApp> {
 
               // 设置开关
               Card(
+                color: _isLockEnabled ? null : Colors.grey[100],
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('安全设置',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
-                      SwitchListTile(
-                        title: const Text('启用安全锁'),
-                        value: _isLockEnabled,
-                        onChanged: (value) {
-                          setState(() {
-                            _isLockEnabled = value;
-                          });
-                          _appSecurityLockPlugin.setLockEnabled(value);
-                        },
+                      Row(
+                        children: [
+                          Icon(
+                            _isLockEnabled
+                                ? Icons.security
+                                : Icons.security_outlined,
+                            color: _isLockEnabled ? Colors.green : Colors.grey,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text('安全设置',
+                              style: TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold)),
+                        ],
                       ),
                       SwitchListTile(
                         title: const Text('启用面容ID/指纹'),
+                        subtitle: Text(_isBiometricAvailable
+                            ? '支持 $_biometricType'
+                            : '设备不支持生物识别'),
                         value: _isFaceIDEnabled,
-                        onChanged: _isBiometricAvailable
+                        onChanged: (_isBiometricAvailable && _isLockEnabled)
                             ? (value) {
                                 setState(() {
                                   _isFaceIDEnabled = value;
                                 });
                                 _appSecurityLockPlugin.setFaceIDEnabled(value);
+                                reinitializePlugin();
+                              }
+                            : null,
+                      ),
+                      SwitchListTile(
+                        title: const Text('后台超时锁定'),
+                        subtitle: const Text('应用进入后台后自动锁定'),
+                        value: _isBackgroundLockEnabled,
+                        onChanged: _isLockEnabled
+                            ? (value) {
+                                setState(() {
+                                  _isBackgroundLockEnabled = value;
+                                });
+                                _appSecurityLockPlugin
+                                    .setBackgroundLockEnabled(value);
+                                reinitializePlugin();
+                              }
+                            : null,
+                      ),
+                      SwitchListTile(
+                        title: const Text('屏幕锁定检测'),
+                        subtitle: const Text('屏幕亮度为0时自动锁定'),
+                        value: _isScreenLockEnabled,
+                        onChanged: _isLockEnabled
+                            ? (value) {
+                                setState(() {
+                                  _isScreenLockEnabled = value;
+                                });
+                                reinitializePlugin();
                               }
                             : null,
                       ),
                       SwitchListTile(
                         title: const Text('启用密码解锁'),
+                        subtitle: const Text('使用设备密码作为备选方案'),
                         value: _isPasscodeEnabled,
-                        onChanged: (value) {
-                          setState(() {
-                            _isPasscodeEnabled = value;
-                          });
-                          _appSecurityLockPlugin.setPasscodeEnabled(value);
-                        },
+                        onChanged: _isLockEnabled
+                            ? (value) {
+                                setState(() {
+                                  _isPasscodeEnabled = value;
+                                });
+                                _appSecurityLockPlugin
+                                    .setPasscodeEnabled(value);
+                                reinitializePlugin();
+                              }
+                            : null,
                       ),
                       const Divider(),
                       const Text('后台超时时间',
@@ -210,13 +271,17 @@ class _MyAppState extends State<MyApp> {
                               max: 300.0,
                               divisions: 9,
                               label: '${_backgroundTimeout.toInt()}秒',
-                              onChanged: (value) {
-                                setState(() {
-                                  _backgroundTimeout = value;
-                                });
-                                _appSecurityLockPlugin
-                                    .setBackgroundTimeout(value);
-                              },
+                              onChanged:
+                                  (_isLockEnabled && _isBackgroundLockEnabled)
+                                      ? (value) {
+                                          setState(() {
+                                            _backgroundTimeout = value;
+                                          });
+                                          _appSecurityLockPlugin
+                                              .setBackgroundTimeout(value);
+                                          reinitializePlugin();
+                                        }
+                                      : null,
                             ),
                           ),
                           const Text('5分钟'),
