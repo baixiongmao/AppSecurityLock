@@ -1,3 +1,18 @@
+## 0.0.3
+
+### Swift Package Manager Support
+
+* **Added Swift Package Manager Support**: Package now supports iOS Swift Package Manager
+* **Full pub.dev Score Compliance**: Added `ios/app_security_lock/Package.swift` for complete pub.dev compatibility
+* **Future-proof iOS Integration**: Ensures maximum compatibility with modern iOS development workflows
+
+### Changes
+
+- ✅ Added `Package.swift` file for Swift Package Manager support
+- ✅ Configured iOS platform minimum version (iOS 11.0+)
+- ✅ Enhanced pub.dev scoring compliance
+- ✅ Improved iOS integration options for developers
+
 ## 0.0.2
 
 ### Improvements & Bug Fixes
