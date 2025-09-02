@@ -1,3 +1,23 @@
+## 0.0.2
+
+### Improvements & Bug Fixes
+
+* **Enhanced Documentation**: Improved README with better usage examples and API documentation
+* **Better pub.dev Score**: Optimized package metadata for higher pub.dev analysis score
+* **Improved Example App**: Enhanced example app with better UI and event logging
+* **Test Coverage**: Fixed and improved unit tests for better reliability
+* **Code Quality**: Resolved all dart analyze warnings and issues
+* **Repository Links**: Added proper repository, issue tracker, and documentation URLs
+
+### Changes
+
+- ✅ Updated pubspec.yaml with complete repository information
+- ✅ Enhanced CHANGELOG with detailed release notes
+- ✅ Improved example app UI with event logs display
+- ✅ Fixed all dart analyze issues (0 warnings)
+- ✅ Updated test files to match current API
+- ✅ Better error handling and code documentation
+
 ## 0.0.1
 
 ### Initial Release
