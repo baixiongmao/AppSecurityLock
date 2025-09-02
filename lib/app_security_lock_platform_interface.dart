@@ -98,4 +98,9 @@ abstract class AppSecurityLockPlatform extends PlatformInterface {
   void restartTouchTimer() {
     throw UnimplementedError('restartTouchTimer() has not been implemented.');
   }
+
+  /// 用户交互时调用（主要用于Android平台）
+  void onUserInteraction() {
+    throw UnimplementedError('onUserInteraction() has not been implemented.');
+  }
 }

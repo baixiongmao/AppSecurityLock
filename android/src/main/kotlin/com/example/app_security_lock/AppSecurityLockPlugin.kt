@@ -10,6 +10,9 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
 import androidx.annotation.NonNull
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -57,6 +60,10 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     // 广播接收器
     private var screenBroadcastReceiver: BroadcastReceiver? = null
     private var isScreenReceiverRegistered = false
+    
+    // 触摸监听相关
+    private var touchListener: View.OnTouchListener? = null
+    private var isTouchListenerSetup = false
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, CHANNEL_NAME)
@@ -67,6 +74,8 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         if (context is Application) {
             (context as Application).registerActivityLifecycleCallbacks(this)
         }
+        
+        Log.d(TAG, "AppSecurityLockPlugin attached to engine")
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
@@ -77,50 +86,53 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
             "setLockEnabled" -> {
                 val enabled = call.argument<Boolean>("enabled") ?: false
-                isLocked = enabled
+                setLockEnabled(enabled)
                 result.success(null)
             }
 
             "setScreenLockEnabled" -> {
                 val enabled = call.argument<Boolean>("enabled") ?: false
-                isScreenLockEnabled = enabled
+                setScreenLockEnabled(enabled)
                 result.success(null)
             }
 
             "setBackgroundLockEnabled" -> {
                 val enabled = call.argument<Boolean>("enabled") ?: false
-                isBackgroundLockEnabled = enabled
+                setBackgroundLockEnabled(enabled)
                 result.success(null)
             }
 
             "setBackgroundTimeout" -> {
                 val timeout = call.argument<Double>("timeout") ?: 60.0
-                backgroundTimeout = (timeout * 1000).toLong() // 转换为毫秒
-                Log.d(TAG, "Background timeout set to $backgroundTimeout ms")
+                setBackgroundTimeout(timeout)
                 result.success(null)
             }
 
             "setTouchTimeout" -> {
                 val timeout = call.argument<Double>("timeout") ?: 30.0
-                touchTimeout = (timeout * 1000).toLong() // 转换为毫秒
-                Log.d(TAG, "Touch timeout set to $touchTimeout ms")
+                setTouchTimeout(timeout)
                 result.success(null)
             }
 
             "setTouchTimeoutEnabled" -> {
                 val enabled = call.argument<Boolean>("enabled") ?: false
-                isTouchTimeoutEnabled = enabled
-                Log.d(TAG, "Touch timeout enabled: $isTouchTimeoutEnabled")
-                if (enabled) {
-                    startTouchTimeout()
-                } else {
-                    stopTouchTimeout()
-                }
+                setTouchTimeoutEnabled(enabled)
+                result.success(null)
+            }
+
+            "restartTouchTimer" -> {
+                restartTouchTimeoutFromButton()
+                result.success(null)
+            }
+
+            "onUserInteraction" -> {
+                onUserInteraction()
                 result.success(null)
             }
 
             "stopBrightnessDetection" -> {
-                stopScreenDetection()
+                // 屏幕监听器现在始终保持开启，不再通过此方法停止
+                Log.d(TAG, "屏幕监听器保持开启状态")
                 result.success(null)
             }
 
@@ -155,8 +167,22 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
         Log.d(
             TAG,
-            "初始化参数 - isScreenLockEnabled: $isScreenLockEnabled, isBackgroundLockEnabled: $isBackgroundLockEnabled, backgroundTimeout: $backgroundTimeout, isTouchTimeoutEnabled: $isTouchTimeoutEnabled, touchTimeout: $touchTimeout"
+            "初始化参数 - isScreenLockEnabled: $isScreenLockEnabled, " +
+            "isBackgroundLockEnabled: $isBackgroundLockEnabled, " +
+            "backgroundTimeout: $backgroundTimeout, " +
+            "isTouchTimeoutEnabled: $isTouchTimeoutEnabled, " +
+            "touchTimeout: $touchTimeout"
         )
+        
+        // 启动触摸超时功能（如果启用）
+        if (isTouchTimeoutEnabled) {
+            setupTouchListener()
+            startTouchTimeout()
+        }
+        
+        // 始终启动屏幕监听器，但锁定操作基于isScreenLockEnabled状态
+        startScreenDetection()
+        
         result.success(null)
     }
 
@@ -168,15 +194,80 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         Log.d(TAG, "开始监听应用生命周期")
     }
 
+    // 设置锁定状态
+    private fun setLockEnabled(enabled: Boolean) {
+        isLocked = enabled
+        Log.d(TAG, "Lock state changed to: $enabled")
+        
+        // 如果解锁，重新启动触摸超时功能
+        if (!enabled && isTouchTimeoutEnabled) {
+            setupTouchListener()
+            startTouchTimeout()
+        }
+    }
+
+    // 设置屏幕锁定检测
+    private fun setScreenLockEnabled(enabled: Boolean) {
+        isScreenLockEnabled = enabled
+        Log.d(TAG, "Screen lock enabled: $enabled (屏幕监听器始终保持开启)")
+        
+        // 屏幕监听器始终保持开启状态
+        // 只有isScreenLockEnabled=true时才会执行锁定操作
+    }
+
+    // 设置后台锁定
+    private fun setBackgroundLockEnabled(enabled: Boolean) {
+        isBackgroundLockEnabled = enabled
+        Log.d(TAG, "Background lock enabled: $enabled")
+        
+        if (enabled && isInBackground) {
+            startBackgroundTimeoutTimer()
+        } else {
+            stopBackgroundTimeoutTimer()
+        }
+    }
+
+    // 设置后台超时时间
+    private fun setBackgroundTimeout(timeout: Double) {
+        backgroundTimeout = (timeout * 1000).toLong() // 转换为毫秒
+        Log.d(TAG, "Background timeout set to $backgroundTimeout ms")
+        
+        // 如果后台定时器正在运行，重启它
+        if (backgroundTimeoutHandler != null && isBackgroundLockEnabled) {
+            startBackgroundTimeoutTimer()
+        }
+    }
+
+    // 设置触摸超时时间
+    private fun setTouchTimeout(timeout: Double) {
+        touchTimeout = (timeout * 1000).toLong() // 转换为毫秒
+        Log.d(TAG, "Touch timeout set to $touchTimeout ms")
+        
+        // 如果触摸定时器正在运行，重启它
+        if (touchTimeoutHandler != null && isTouchTimeoutEnabled) {
+            startTouchTimeout()
+        }
+    }
+
+    // 设置触摸超时启用状态
+    private fun setTouchTimeoutEnabled(enabled: Boolean) {
+        isTouchTimeoutEnabled = enabled
+        Log.d(TAG, "Touch timeout enabled: $isTouchTimeoutEnabled")
+        
+        if (enabled && !isLocked) {
+            setupTouchListener()
+            startTouchTimeout()
+        } else {
+            removeTouchListener()
+            stopTouchTimeout()
+        }
+    }
+
     // 开始屏幕状态检测（使用广播接收器）
     private fun startScreenDetection() {
         stopScreenDetection()
 
-        if (!isScreenLockEnabled || isLocked) {
-            return
-        }
-
-        Log.d(TAG, "开始屏幕状态检测")
+        Log.d(TAG, "开始屏幕状态监听器（始终开启）")
         initScreenBroadcastReceiver()
         registerScreenReceiver()
     }
@@ -187,21 +278,41 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 override fun onReceive(context: Context, intent: Intent) {
                     when (intent.action) {
                         Intent.ACTION_SCREEN_OFF -> {
-                            Log.d(TAG, "屏幕关闭，锁定应用")
-                            if (!isLocked) {
-                                isLocked = true
-                                stopAllTimers()
-                                invokeMethod("onAppLocked", null)
+                            Log.d(TAG, "屏幕关闭事件")
+                            
+                            // 检查是否启用了屏幕锁定监听
+                            if (!isScreenLockEnabled) {
+                                Log.d(TAG, "屏幕锁定监听未启用，跳过")
+                                return
                             }
+                            
+                            // 检查应用是否已经锁定
+                            if (isLocked) {
+                                Log.d(TAG, "应用已锁定，跳过重复锁定")
+                                return
+                            }
+                            
+                            // 执行应用锁定
+                            Log.d(TAG, "执行应用锁定")
+                            isLocked = true
+                            stopAllTimers()
+                            removeTouchListener()
+                            invokeMethod("onAppLocked", null)
                         }
                         Intent.ACTION_SCREEN_ON -> {
                             Log.d(TAG, "屏幕开启")
-                            // 屏幕开启时不自动解锁，需要用户解锁
+                            // 屏幕开启时不做任何操作，等待用户解锁
                         }
                         Intent.ACTION_USER_PRESENT -> {
                             Log.d(TAG, "用户解锁设备")
-                            // 当用户解锁设备时，可以选择性地解锁应用
-                            // 这里暂时不自动解锁应用，由应用层决定
+                            // 用户解锁设备时不自动解锁应用
+                            // 应用解锁由用户通过UI操作控制
+                            
+                            // 如果应用未锁定且启用了触摸超时，重新启动触摸超时计时器
+                            if (!isLocked && isTouchTimeoutEnabled && touchTimeout > 0) {
+                                Log.d(TAG, "设备解锁后重新启动触摸超时")
+                                restartTouchTimeout()
+                            }
                         }
                     }
                 }
@@ -213,9 +324,12 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         context?.let { ctx ->
             if (!isScreenReceiverRegistered && screenBroadcastReceiver != null) {
                 try {
-                    ctx.registerReceiver(screenBroadcastReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
-                    ctx.registerReceiver(screenBroadcastReceiver, IntentFilter(Intent.ACTION_SCREEN_ON))
-                    ctx.registerReceiver(screenBroadcastReceiver, IntentFilter(Intent.ACTION_USER_PRESENT))
+                    val intentFilter = IntentFilter().apply {
+                        addAction(Intent.ACTION_SCREEN_OFF)
+                        addAction(Intent.ACTION_SCREEN_ON)
+                        addAction(Intent.ACTION_USER_PRESENT)
+                    }
+                    ctx.registerReceiver(screenBroadcastReceiver, intentFilter)
                     isScreenReceiverRegistered = true
                     Log.d(TAG, "屏幕状态广播接收器已注册")
                 } catch (e: Exception) {
@@ -259,6 +373,7 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         Log.d(TAG, "后台超时发生")
         isLocked = true
         stopAllTimers()
+        removeTouchListener()
         invokeMethod("onAppLocked", null)
     }
 
@@ -283,19 +398,27 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         
         touchTimeoutHandler = Handler(Looper.getMainLooper())
         touchTimeoutRunnable = Runnable {
-            Log.d(TAG, "触摸超时，锁定应用")
-            isLocked = true
-            invokeMethod("onAppLocked", null)
+            handleTouchTimeout()
         }
         
         touchTimeoutHandler?.postDelayed(touchTimeoutRunnable!!, touchTimeout)
     }
+
+    private fun handleTouchTimeout() {
+        Log.d(TAG, "触摸超时，锁定应用")
+        isLocked = true
+        stopAllTimers()
+        removeTouchListener()
+        invokeMethod("onAppLocked", null)
+    }
     
     private fun stopTouchTimeout() {
-        touchTimeoutHandler?.removeCallbacks(touchTimeoutRunnable ?: return)
-        touchTimeoutHandler = null
-        touchTimeoutRunnable = null
-        Log.d(TAG, "停止触摸超时检测")
+        touchTimeoutRunnable?.let {
+            touchTimeoutHandler?.removeCallbacks(it)
+            touchTimeoutRunnable = null
+            touchTimeoutHandler = null
+            Log.d(TAG, "停止触摸超时检测")
+        }
     }
     
     private fun restartTouchTimeout() {
@@ -306,29 +429,145 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         Log.d(TAG, "重新开始触摸超时检测")
         startTouchTimeout()
     }
+    
+    // 从按钮重启触摸定时器（需要重新设置监听器）
+    private fun restartTouchTimeoutFromButton() {
+        if (!isTouchTimeoutEnabled || isLocked) {
+            return
+        }
+        
+        Log.d(TAG, "从按钮重启触摸超时检测")
+        // 重新设置触摸事件监听器和重启定时器
+        setupTouchListener()
+        startTouchTimeout()
+    }
+
+    // 设置触摸监听器
+    private fun setupTouchListener() {
+        activity?.let { act ->
+            if (!isTouchListenerSetup && isTouchTimeoutEnabled && !isLocked) {
+                try {
+                    // 创建触摸监听器
+                    touchListener = View.OnTouchListener { _, event ->
+                        when (event.action) {
+                            MotionEvent.ACTION_DOWN,
+                            MotionEvent.ACTION_MOVE,
+                            MotionEvent.ACTION_UP -> {
+                                onUserInteraction()
+                            }
+                        }
+                        false // 不消费事件，让其他组件继续处理
+                    }
+
+                    // 获取根视图并设置触摸监听器
+                    val rootView = act.findViewById<View>(android.R.id.content)
+                    rootView?.let { root ->
+                        if (root is ViewGroup) {
+                            setTouchListenerRecursively(root)
+                        } else {
+                            root.setOnTouchListener(touchListener)
+                        }
+                        isTouchListenerSetup = true
+                        Log.d(TAG, "触摸监听器设置成功")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "设置触摸监听器失败", e)
+                }
+            }
+        }
+    }
+
+    // 递归设置触摸监听器
+    private fun setTouchListenerRecursively(viewGroup: ViewGroup) {
+        for (i in 0 until viewGroup.childCount) {
+            val child = viewGroup.getChildAt(i)
+            if (child is ViewGroup) {
+                setTouchListenerRecursively(child)
+            }
+            child.setOnTouchListener(touchListener)
+        }
+    }
+
+    // 移除触摸监听器
+    private fun removeTouchListener() {
+        if (isTouchListenerSetup) {
+            activity?.let { act ->
+                try {
+                    val rootView = act.findViewById<View>(android.R.id.content)
+                    rootView?.let { root ->
+                        if (root is ViewGroup) {
+                            removeTouchListenerRecursively(root)
+                        } else {
+                            root.setOnTouchListener(null)
+                        }
+                    }
+                    isTouchListenerSetup = false
+                    touchListener = null
+                    Log.d(TAG, "触摸监听器已移除")
+                } catch (e: Exception) {
+                    Log.e(TAG, "移除触摸监听器失败", e)
+                }
+            }
+        }
+    }
+
+    // 递归移除触摸监听器
+    private fun removeTouchListenerRecursively(viewGroup: ViewGroup) {
+        for (i in 0 until viewGroup.childCount) {
+            val child = viewGroup.getChildAt(i)
+            if (child is ViewGroup) {
+                removeTouchListenerRecursively(child)
+            }
+            child.setOnTouchListener(null)
+        }
+    }
+
+    // 公共方法：用户交互时调用此方法重置触摸计时器
+    fun onUserInteraction() {
+        if (isTouchTimeoutEnabled && !isLocked) {
+            Log.d(TAG, "User interaction detected, restarting touch timer")
+            restartTouchTimeout()
+        }
+    }
 
     private fun stopAllTimers() {
         stopBackgroundTimeoutTimer()
         stopTouchTimeout()
-        stopScreenDetection()
+        // 不停止屏幕检测，保持屏幕监听器始终开启
     }
 
     private fun invokeMethod(method: String, arguments: Any?) {
-        Handler(Looper.getMainLooper()).post {
-            channel.invokeMethod(method, arguments)
+        try {
+            Handler(Looper.getMainLooper()).post {
+                channel.invokeMethod(method, arguments)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "调用Flutter方法失败: $method", e)
         }
     }
 
     // Application.ActivityLifecycleCallbacks 实现
-    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
-    override fun onActivityStarted(activity: Activity) {}
+    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+        Log.d(TAG, "onActivityCreated: ${activity.localClassName}")
+    }
+    
+    override fun onActivityStarted(activity: Activity) {
+        Log.d(TAG, "onActivityStarted: ${activity.localClassName}")
+    }
 
     override fun onActivityResumed(activity: Activity) {
+        Log.d(TAG, "onActivityResumed: ${activity.localClassName}")
         if (isInBackground) {
             Log.d(TAG, "App 进入前台")
             isInBackground = false
             stopAllTimers()
-            startTouchTimeout()  // 进入前台时启动触摸超时
+            
+            // 如果触摸超时启用且未锁定，启动触摸超时
+            if (isTouchTimeoutEnabled && !isLocked) {
+                setupTouchListener()
+                startTouchTimeout()
+            }
+            
             invokeMethod("onEnterForeground", null)
             if (isLocked) {
                 invokeMethod("onAppUnlocked", null)
@@ -337,44 +576,84 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     override fun onActivityPaused(activity: Activity) {
+        Log.d(TAG, "onActivityPaused: ${activity.localClassName}")
         if (!isInBackground) {
             Log.d(TAG, "App 进入后台")
             isInBackground = true
             backgroundTimestamp = System.currentTimeMillis()
+            
+            // 移除触摸监听器
+            removeTouchListener()
+            
             invokeMethod("onEnterBackground", null)
-            startScreenDetection()
-            startBackgroundTimeoutTimer()
+            
+            // 只启动已启用的后台检测
+            if (isBackgroundLockEnabled) {
+                startBackgroundTimeoutTimer()
+            }
+            
+            // 屏幕锁定检测不需要在后台启动，它应该一直在监听屏幕状态广播
         }
     }
 
-    override fun onActivityStopped(activity: Activity) {}
-    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
-    override fun onActivityDestroyed(activity: Activity) {}
+    override fun onActivityStopped(activity: Activity) {
+        Log.d(TAG, "onActivityStopped: ${activity.localClassName}")
+    }
+    
+    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {
+        Log.d(TAG, "onActivitySaveInstanceState: ${activity.localClassName}")
+    }
+    
+    override fun onActivityDestroyed(activity: Activity) {
+        Log.d(TAG, "onActivityDestroyed: ${activity.localClassName}")
+    }
 
     // ActivityAware 实现
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
+        Log.d(TAG, "onAttachedToActivity: ${activity?.localClassName}")
+        
+        // 如果触摸超时已启用，设置触摸监听
+        if (isTouchTimeoutEnabled && !isLocked) {
+            setupTouchListener()
+        }
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
+        Log.d(TAG, "onDetachedFromActivityForConfigChanges")
+        removeTouchListener()
         activity = null
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         activity = binding.activity
+        Log.d(TAG, "onReattachedToActivityForConfigChanges: ${activity?.localClassName}")
+        
+        // 重新设置触摸监听
+        if (isTouchTimeoutEnabled && !isLocked) {
+            setupTouchListener()
+        }
     }
 
     override fun onDetachedFromActivity() {
+        Log.d(TAG, "onDetachedFromActivity")
+        removeTouchListener()
         activity = null
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        Log.d(TAG, "onDetachedFromEngine")
         channel.setMethodCallHandler(null)
         stopAllTimers()
+        stopScreenDetection() // 插件销毁时停止屏幕监听器
+        removeTouchListener()
+        
         context?.let { ctx ->
             if (ctx is Application) {
                 ctx.unregisterActivityLifecycleCallbacks(this)
             }
         }
+        
+        context = null
     }
 }

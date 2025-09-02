@@ -37,9 +37,9 @@ class _MyAppState extends State<MyApp> {
       });
     });
     _appSecurityLockPlugin.setOnAppUnlockedCallback(() {
-      _addLog('App is unlocked');
+      _addLog('please unlock the app');
       setState(() {
-        isLocked = false;
+        isLocked = true;
       });
     });
     _appSecurityLockPlugin.setOnEnterForegroundCallback(() {
@@ -47,9 +47,6 @@ class _MyAppState extends State<MyApp> {
     });
     _appSecurityLockPlugin.setOnEnterBackgroundCallback(() {
       _addLog('App is backgrounded');
-    });
-    _appSecurityLockPlugin.setOnAppUnlockedCallback(() {
-      _addLog('App is locked, please unlock it');
     });
     _appSecurityLockPlugin.init(
       isScreenLockEnabled: isScreenLocked,

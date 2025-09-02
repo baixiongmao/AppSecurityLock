@@ -1,3 +1,37 @@
+## 0.0.5
+
+### Enhanced Screen Monitoring and Touch Timeout Improvements
+
+* **Always-On Screen Monitoring**: Screen broadcast receivers now remain active regardless of screen lock enabled state
+* **Improved Condition Checking**: Enhanced screen lock detection logic with proper conditional validation
+* **Optimized Touch Timeout Management**: Better touch timeout restart mechanism after device unlock
+* **Cross-Platform Consistency**: Unified behavior between iOS and Android implementations
+
+### Platform-Specific Enhancements
+
+#### Android Improvements
+- ✅ **Persistent Screen Monitoring**: BroadcastReceiver now stays registered and only checks `isScreenLockEnabled` before performing lock operations
+- ✅ **Enhanced Touch Timeout**: Fixed touch timeout not restarting properly after device unlock/restart
+- ✅ **Better State Management**: Improved conditional logic for screen lock detection
+- ✅ **Resource Optimization**: More efficient timer and receiver management
+
+#### iOS Consistency
+- ✅ **Maintained Code Quality**: Preserved iOS implementation's clean architecture
+- ✅ **Touch Event Excellence**: Continued leveraging UIGestureRecognizer system advantages
+
+### Bug Fixes
+
+- 🐛 Fixed touch timeout not restarting after `ACTION_USER_PRESENT` event
+- 🐛 Improved screen lock detection conditional logic flow
+- 🐛 Enhanced broadcast receiver lifecycle management
+- 🐛 Optimized timer management in background operations
+
+### API Improvements
+
+- ✅ More reliable screen lock detection behavior
+- ✅ Consistent touch timeout functionality across platforms
+- ✅ Better error handling and logging
+
 ## 0.0.4
 
 ### Touch Timeout Lock Feature
