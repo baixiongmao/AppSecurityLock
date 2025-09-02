@@ -5,13 +5,13 @@
 Pod::Spec.new do |s|
   s.name             = 'app_security_lock'
   s.version          = '0.0.1'
-  s.summary          = 'A new Flutter plugin project.'
+  s.summary          = 'A comprehensive Flutter plugin for app security features including screen lock detection, background timeout, and lifecycle monitoring.'
   s.description      = <<-DESC
-A new Flutter plugin project.
+A comprehensive Flutter plugin for app security features including screen lock detection, background timeout, and lifecycle monitoring.
                        DESC
-  s.homepage         = 'http://example.com'
+  s.homepage         = 'http://bxmao.net'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'email@example.com' }
+  s.author           = { 'Your Company' => 'zxj417870308@gmail.com' }
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
   s.dependency 'Flutter'
