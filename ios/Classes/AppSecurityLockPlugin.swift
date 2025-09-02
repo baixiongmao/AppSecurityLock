@@ -22,6 +22,16 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     // 后台超时定时器
     private var backgroundTimeoutTimer: Timer?
 
+    // 触摸事件相关
+    private var touchTimer: Timer?
+    private var touchTimeout: TimeInterval = 30.0  // 触摸超时时间，默认30秒
+    // 是否开启触摸超时
+    private var isTouchTimeoutEnabled = false
+    // 点击手势识别器
+    private var touchGestureRecognizer: UITapGestureRecognizer?
+    // 平移手势识别器
+    private var panGestureRecognizer: UIPanGestureRecognizer?
+
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(
             name: "app_security_lock", binaryMessenger: registrar.messenger())
@@ -36,10 +46,6 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
         case "init":
-            // 只在首次调用时启动监听
-            if !isListening {
-                startListen()
-            }
 
             // 处理初始化参数
             if let args = call.arguments as? [String: Any] {
@@ -52,17 +58,37 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                 if let timeout = args["backgroundTimeout"] as? Double {
                     backgroundTimeout = timeout
                 }
+                if let touchTimeoutEnabled = args["isTouchTimeoutEnabled"] as? Bool {
+                    isTouchTimeoutEnabled = touchTimeoutEnabled
+                }
+                if let touchTimeoutSeconds = args["touchTimeout"] as? Double {
+                    touchTimeout = touchTimeoutSeconds
+                }
             }
+            // 只在首次调用时启动监听
+            if !isListening {
+                startListen()
+            }
+            
+            // 根据配置启动相应的功能
+            if isTouchTimeoutEnabled {
+                setupTouchEventListeners()
+                startTouchTimer()
+            }
+            
             print(
-                "Flutter: 初始化参数 -  isScreenLockEnabled: \(isScreenLockEnabled), isBackgroundLockEnabled: \(isBackgroundLockEnabled), backgroundTimeout: \(backgroundTimeout)"
+                "Flutter: 初始化参数 \n  isScreenLockEnabled: \(isScreenLockEnabled),\n  isBackgroundLockEnabled: \(isBackgroundLockEnabled),\n  backgroundTimeout: \(backgroundTimeout),\n  isTouchTimeoutEnabled: \(isTouchTimeoutEnabled),\n  touchTimeout: \(touchTimeout)"
             )
 
             result(nil)
+        // 更新锁定状态
         case "setLockEnabled":
             if let args = call.arguments as? [String: Any],
                 let enabled = args["enabled"] as? Bool
             {
                 isLocked = enabled
+                print("AppSecurityLock: Lock state changed to: \(enabled)")
+                
                 result(nil)
             } else {
                 result(
@@ -70,6 +96,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                         code: "INVALID_ARGUMENT", message: "Missing enabled parameter", details: nil
                     ))
             }
+        // 更新屏幕锁定开关
         case "setScreenLockEnabled":
             if let args = call.arguments as? [String: Any],
                 let enabled = args["enabled"] as? Bool
@@ -82,6 +109,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                         code: "INVALID_ARGUMENT", message: "Missing enabled parameter", details: nil
                     ))
             }
+        // 更新后台锁定开关
         case "setBackgroundLockEnabled":
             if let args = call.arguments as? [String: Any],
                 let enabled = args["enabled"] as? Bool
@@ -107,6 +135,34 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                         code: "INVALID_ARGUMENT", message: "Missing timeout parameter", details: nil
                     ))
             }
+        // 更新触摸超时时间
+        case "setTouchTimeout":
+            if let args = call.arguments as? [String: Any],
+                let timeout = args["timeout"] as? TimeInterval
+            {
+                setTouchTimeout(timeout)
+                result(nil)
+            } else {
+                result(
+                    FlutterError(
+                        code: "INVALID_ARGUMENT", message: "Missing timeout parameter", details: nil
+                    ))
+            }
+        case "setTouchTimeoutEnabled":
+            if let args = call.arguments as? [String: Any],
+                let enabled = args["enabled"] as? Bool
+            {
+                setTouchTimeoutEnabled(enabled)
+                result(nil)
+            } else {
+                result(
+                    FlutterError(
+                        code: "INVALID_ARGUMENT", message: "Missing enabled parameter", details: nil
+                    ))
+            }
+        case "restartTouchTimer":
+            restartTouchTimerFromButton()
+            result(nil)
         case "stopBrightnessDetection":
             stopBrightnessDetection()
             result(nil)
@@ -137,16 +193,25 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             selector: #selector(onEnterBackground),
             name: UIApplication.didEnterBackgroundNotification,
             object: nil)
+
+        // 触摸事件监听将在 init 方法中根据配置决定是否启动
     }
 
     @objc private func onEnterForeground() {
         print("App 进入前台")
         // 停止亮度检测，因为应用已进入前台
         stopAllTimers()
+        // 启动触摸定时器
         lifecycleChannel?.invokeMethod("onEnterForeground", arguments: nil)
         if isLocked {
             // 通知前台解锁
             lifecycleChannel?.invokeMethod("onAppUnlocked", arguments: nil)
+        }
+        
+        // 重新启动触摸超时功能（如果启用的话）
+        if isTouchTimeoutEnabled && !isLocked {
+            setupTouchEventListeners()
+            startTouchTimer()
         }
     }
 
@@ -264,6 +329,162 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         }
         if brightnessTimer != nil {
             stopBrightnessDetection()
+        }
+        if touchTimer != nil {
+            stopTouchTimer()
+        }
+    }
+
+    // 设置触摸事件监听
+    private func setupTouchEventListeners() {
+        // 延迟设置，确保UI已经加载
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            print("AppSecurityLock: Setting up touch event listeners")
+            self?.addTouchEventListeners()
+        }
+    }
+
+    // 设置触摸事件监听
+    private func addTouchEventListeners() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+            let window = windowScene.windows.first
+        else {
+            return
+        }
+
+        // 移除旧的监听器
+        removeTouchEventListeners()
+
+        // 添加点击手势识别器
+        touchGestureRecognizer = UITapGestureRecognizer(
+            target: self, action: #selector(handleUserTouch))
+        touchGestureRecognizer?.cancelsTouchesInView = false
+        touchGestureRecognizer?.delaysTouchesBegan = false
+        touchGestureRecognizer?.delaysTouchesEnded = false
+        window.addGestureRecognizer(touchGestureRecognizer!)
+
+        // 添加拖拽手势识别器
+        panGestureRecognizer = UIPanGestureRecognizer(
+            target: self, action: #selector(handleUserTouch))
+        panGestureRecognizer?.cancelsTouchesInView = false
+        panGestureRecognizer?.delaysTouchesBegan = false
+        panGestureRecognizer?.delaysTouchesEnded = false
+        window.addGestureRecognizer(panGestureRecognizer!)
+
+        print("AppSecurityLock: Touch event listeners added successfully")
+    }
+
+    @objc private func handleUserTouch() {
+        // 重置触摸超时定时器
+        if isTouchTimeoutEnabled && !isLocked {
+            restartTouchTimer()
+        }
+    }
+
+    // 移除触摸事件监听
+    private func removeTouchEventListeners() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+            let window = windowScene.windows.first
+        else {
+            return
+        }
+
+        if let touchRecognizer = touchGestureRecognizer {
+            window.removeGestureRecognizer(touchRecognizer)
+            touchGestureRecognizer = nil
+        }
+
+        if let panRecognizer = panGestureRecognizer {
+            window.removeGestureRecognizer(panRecognizer)
+            panGestureRecognizer = nil
+        }
+
+        print("AppSecurityLock: Touch event listeners removed")
+    }
+
+    // 设置触摸超时时间
+    func setTouchTimeout(_ timeout: TimeInterval) {
+        touchTimeout = timeout
+        print("AppSecurityLock: Touch timeout set to \(touchTimeout) seconds")
+        // 如果触摸定时器正在运行，重启它
+        if touchTimer != nil {
+            restartTouchTimer()
+        }
+    }
+
+    // 设置触摸超时是否启用
+    func setTouchTimeoutEnabled(_ enabled: Bool) {
+        isTouchTimeoutEnabled = enabled
+        print("AppSecurityLock: Touch timeout enabled: \(isTouchTimeoutEnabled)")
+
+        if enabled {
+            setupTouchEventListeners()
+            startTouchTimer()
+        } else {
+            stopTouchTimer()
+            removeTouchEventListeners()
+        }
+    }
+
+    // 开始触摸定时器
+    private func startTouchTimer() {
+        guard isTouchTimeoutEnabled && !isLocked else { return }
+
+        stopTouchTimer()
+        print("AppSecurityLock: Starting touch timer with \(touchTimeout) seconds")
+
+        touchTimer = Timer.scheduledTimer(withTimeInterval: touchTimeout, repeats: false) {
+            [weak self] _ in
+            self?.handleTouchTimeout()
+        }
+    }
+
+    // 重启触摸定时器
+    private func restartTouchTimer() {
+        guard isTouchTimeoutEnabled && !isLocked else { return }
+
+        print("AppSecurityLock: Restarting touch timer")
+        // 只重启定时器，不需要重新设置监听器
+        startTouchTimer()
+    }
+
+    // 从按钮重启触摸定时器（需要重新设置监听器）
+    private func restartTouchTimerFromButton() {
+        guard isTouchTimeoutEnabled && !isLocked else { return }
+
+        print("AppSecurityLock: Restarting touch timer from button")
+        // 重新设置触摸事件监听器和重启定时器
+        setupTouchEventListeners()
+        startTouchTimer()
+    }
+
+    // 停止触摸定时器
+    private func stopTouchTimer() {
+        if let timer = touchTimer {
+            print("AppSecurityLock: Stopping touch timer")
+            timer.invalidate()
+            touchTimer = nil
+        }
+    }
+
+    // 处理触摸超时
+    private func handleTouchTimeout() {
+        print("AppSecurityLock: Touch timeout occurred")
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            // 锁定应用
+            self.isLocked = true
+            print("AppSecurityLock: App is locked due to touch timeout")
+
+            // 触发锁定回调
+            self.lifecycleChannel?.invokeMethod("onAppLocked", arguments: nil)
+
+            // 停止所有定时器
+            self.stopAllTimers()
+            // 移除触摸事件监听
+            self.removeTouchEventListeners()
         }
     }
 

@@ -46,6 +46,8 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
     bool? isScreenLockEnabled,
     bool? isBackgroundLockEnabled,
     double? backgroundTimeout,
+    bool? isTouchTimeoutEnabled,
+    double? touchTimeout,
   }) {
     final Map<String, dynamic> arguments = {};
 
@@ -57,6 +59,12 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
     }
     if (backgroundTimeout != null) {
       arguments['backgroundTimeout'] = backgroundTimeout;
+    }
+    if (isTouchTimeoutEnabled != null) {
+      arguments['isTouchTimeoutEnabled'] = isTouchTimeoutEnabled;
+    }
+    if (touchTimeout != null) {
+      arguments['touchTimeout'] = touchTimeout;
     }
     return methodChannel.invokeMethod(
         'init', arguments.isEmpty ? null : arguments);
@@ -111,5 +119,25 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
   Future<void> setScreenLockEnabled(bool enabled) {
     return methodChannel
         .invokeMethod('setScreenLockEnabled', {'enabled': enabled});
+  }
+
+  /// 设置触摸超时启用状态
+  @override
+  Future<void> setTouchTimeoutEnabled(bool enabled) {
+    return methodChannel
+        .invokeMethod('setTouchTimeoutEnabled', {'enabled': enabled});
+  }
+
+  /// 设置触摸超时时间（秒）
+  @override
+  Future<void> setTouchTimeout(double timeoutSeconds) {
+    return methodChannel
+        .invokeMethod('setTouchTimeout', {'timeout': timeoutSeconds});
+  }
+
+  /// 重启触摸定时器
+  @override
+  void restartTouchTimer() {
+    methodChannel.invokeMethod('restartTouchTimer');
   }
 }

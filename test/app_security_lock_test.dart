@@ -7,13 +7,15 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 class MockAppSecurityLockPlatform
     with MockPlatformInterfaceMixin
     implements AppSecurityLockPlatform {
-
   @override
   Future<void> init({
     bool? isScreenLockEnabled,
     bool? isBackgroundLockEnabled,
     double? backgroundTimeout,
-  }) => Future.value();
+    bool? isTouchTimeoutEnabled,
+    double? touchTimeout,
+  }) =>
+      Future.value();
 
   @override
   Future<void> setLockEnabled(bool enabled) => Future.value();
@@ -38,10 +40,17 @@ class MockAppSecurityLockPlatform
 
   @override
   void setOnAppUnlockedCallback(AppUnlockedCallback? callback) {}
+
+  @override
+  Future<void> setTouchTimeout(double timeoutSeconds) => Future.value();
+
+  @override
+  Future<void> setTouchTimeoutEnabled(bool enabled) => Future.value();
 }
 
 void main() {
-  final AppSecurityLockPlatform initialPlatform = AppSecurityLockPlatform.instance;
+  final AppSecurityLockPlatform initialPlatform =
+      AppSecurityLockPlatform.instance;
 
   test('$MethodChannelAppSecurityLock is the default instance', () {
     expect(initialPlatform, isInstanceOf<MethodChannelAppSecurityLock>());

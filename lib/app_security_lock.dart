@@ -12,16 +12,22 @@ class AppSecurityLock {
   /// [isScreenLockEnabled] 是否启用屏幕锁定检测
   /// [isBackgroundLockEnabled] 是否启用后台锁定
   /// [backgroundTimeout] 后台超时时间（秒）
+  /// [isTouchTimeoutEnabled] 是否启用触摸超时锁定
+  /// [touchTimeout] 触摸超时时间（秒）
   ///
   Future<void> init({
     bool? isScreenLockEnabled,
     bool? isBackgroundLockEnabled,
     double? backgroundTimeout,
+    bool? isTouchTimeoutEnabled,
+    double? touchTimeout,
   }) {
     return AppSecurityLockPlatform.instance.init(
       isScreenLockEnabled: isScreenLockEnabled,
       isBackgroundLockEnabled: isBackgroundLockEnabled,
       backgroundTimeout: backgroundTimeout,
+      isTouchTimeoutEnabled: isTouchTimeoutEnabled,
+      touchTimeout: touchTimeout,
     );
   }
 
@@ -65,5 +71,22 @@ class AppSecurityLock {
   /// 更新屏幕锁定功能状态
   void setScreenLockEnabled(bool enabled) {
     AppSecurityLockPlatform.instance.setScreenLockEnabled(enabled);
+  }
+
+  /// 更新触摸超时启用状态
+  /// [enabled] 是否启用触摸超时锁定
+  Future<void> setTouchTimeoutEnabled(bool enabled) {
+    return AppSecurityLockPlatform.instance.setTouchTimeoutEnabled(enabled);
+  }
+
+  /// 设置触摸超时时间
+  /// [timeoutSeconds] 触摸超时时间，单位为秒
+  Future<void> setTouchTimeout(double timeoutSeconds) {
+    return AppSecurityLockPlatform.instance.setTouchTimeout(timeoutSeconds);
+  }
+
+  /// 重启触摸定时器
+  void restartTouchTimer() {
+    AppSecurityLockPlatform.instance.restartTouchTimer();
   }
 }

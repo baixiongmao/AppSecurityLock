@@ -16,6 +16,8 @@ class _MyAppState extends State<MyApp> {
   final _appSecurityLockPlugin = AppSecurityLock();
   // 当前是否锁定
   bool isLocked = false;
+  bool isBackgroundLocked = false;
+  bool isScreenLocked = false;
   final List<String> _logs = [];
 
   void _addLog(String message) {
@@ -50,9 +52,11 @@ class _MyAppState extends State<MyApp> {
       _addLog('App is locked, please unlock it');
     });
     _appSecurityLockPlugin.init(
-      isScreenLockEnabled: true,
-      isBackgroundLockEnabled: true,
+      isScreenLockEnabled: isScreenLocked,
+      isBackgroundLockEnabled: isBackgroundLocked,
       backgroundTimeout: 5.0,
+      isTouchTimeoutEnabled: true,
+      touchTimeout: 10.0, // 30 seconds of inactivity
     );
   }
 
@@ -64,46 +68,212 @@ class _MyAppState extends State<MyApp> {
           title: const Text('App Security Lock Example'),
           backgroundColor: Colors.blue,
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Security Lock Status: ${isLocked ? "Locked" : "Unlocked"}',
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                      Switch(
-                        value: isLocked,
-                        onChanged: (value) {
-                          setState(() {
-                            isLocked = value;
-                            _appSecurityLockPlugin.setLockEnabled(value);
-                          });
-                        },
-                      ),
-                    ],
+        body: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Security Lock Status: ${isLocked ? "Locked" : "Unlocked"}',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        Switch(
+                          value: isLocked,
+                          onChanged: (value) {
+                            setState(() {
+                              isLocked = value;
+                              _appSecurityLockPlugin.setLockEnabled(value);
+                            });
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Event Logs:',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: Container(
+                const SizedBox(height: 16),
+                // Touch Timeout Controls
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Touch Timeout Settings:',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                                child: ElevatedButton(
+                                    onPressed: () => _appSecurityLockPlugin
+                                        .restartTouchTimer(),
+                                    child: const Text('restart'))),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  _appSecurityLockPlugin
+                                      .setTouchTimeoutEnabled(true);
+                                  _addLog('Touch timeout enabled');
+                                },
+                                child: const Text('Enable Touch Timeout'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  _appSecurityLockPlugin
+                                      .setTouchTimeoutEnabled(false);
+                                  _addLog('Touch timeout disabled');
+                                },
+                                child: const Text('Disable Touch Timeout'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  _appSecurityLockPlugin.setTouchTimeout(10.0);
+                                  _addLog('Touch timeout set to 10 seconds');
+                                },
+                                child: const Text('10s Timeout'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  _appSecurityLockPlugin.setTouchTimeout(30.0);
+                                  _addLog('Touch timeout set to 30 seconds');
+                                },
+                                child: const Text('30s Timeout'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Background Timer Controls:',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Text('Background Lock:'),
+                            Switch(
+                                value: isBackgroundLocked,
+                                onChanged: (value) {
+                                  setState(() {
+                                    isBackgroundLocked = value;
+                                  });
+                                  _appSecurityLockPlugin
+                                      .setBackgroundLockEnabled(value);
+                                }),
+                          ],
+                        ),
+                        Wrap(
+                          spacing: 10,
+                          children: [
+                            ElevatedButton(
+                              onPressed: () {
+                                _appSecurityLockPlugin
+                                    .setBackgroundLockEnabled(false);
+                                _addLog('Background timer restarted');
+                              },
+                              child: const Text('30s Timer'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                _appSecurityLockPlugin
+                                    .setBackgroundTimeout(60.0);
+                                _addLog('Background timer restarted');
+                              },
+                              child: const Text('60s Timer'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                _appSecurityLockPlugin
+                                    .setBackgroundTimeout(30.0);
+                                _addLog('Background timer restarted');
+                              },
+                              child: const Text('30s Timer'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Screen Timer Controls:',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Text('Screen Lock:'),
+                            Switch(
+                                value: isScreenLocked,
+                                onChanged: (value) {
+                                  setState(() {
+                                    isScreenLocked = value;
+                                  });
+                                  _appSecurityLockPlugin
+                                      .setScreenLockEnabled(value);
+                                }),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Event Logs:',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey),
                     borderRadius: BorderRadius.circular(8),
                   ),
+                  height: 200,
                   child: ListView.builder(
                     itemCount: _logs.length,
                     itemBuilder: (context, index) {
@@ -120,8 +290,8 @@ class _MyAppState extends State<MyApp> {
                     },
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

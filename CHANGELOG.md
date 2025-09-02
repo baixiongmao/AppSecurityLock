@@ -1,3 +1,36 @@
+## 0.0.4
+
+### Touch Timeout Lock Feature
+
+* **New Touch Timeout Functionality**: Added touch event monitoring with configurable timeout lock
+* **Cross-Platform Touch Detection**: Implemented touch event listeners for both iOS and Android
+* **Gesture Recognition System**: iOS uses UITapGestureRecognizer and UIPanGestureRecognizer for comprehensive touch detection
+* **Configurable Touch Timeout**: Support for custom touch timeout duration and enable/disable state
+* **Touch Timer Management**: Smart touch timer restart mechanism with infinite loop prevention
+* **Enhanced Security**: App automatically locks after period of user inactivity
+
+### New APIs
+
+- ✅ `setTouchTimeoutEnabled(bool enabled)` - Enable/disable touch timeout functionality
+- ✅ `setTouchTimeout(double timeoutSeconds)` - Configure touch timeout duration
+- ✅ `restartTouchTimer()` - Manual restart of touch timeout timer
+- ✅ Support for touch timeout parameters in `init()` method
+
+### Platform Updates
+
+- ✅ **iOS**: Comprehensive gesture recognizer implementation with UIWindow-based touch detection
+- ✅ **Android**: Touch timeout timer management with Handler and Runnable
+- ✅ **iOS**: Upgraded minimum version to iOS 13.0 for enhanced functionality
+- ✅ Fixed infinite loop issues in touch event listener setup
+- ✅ Improved touch timer lifecycle management
+
+### Bug Fixes
+
+- 🐛 Fixed touch event listener infinite loop during screen interactions
+- 🐛 Resolved touch timer not restarting properly after unlock
+- 🐛 Fixed touch event listeners not being set up correctly on init
+- 🐛 Improved touch timer state management during app lifecycle changes
+
 ## 0.0.3
 
 ### Swift Package Manager Support

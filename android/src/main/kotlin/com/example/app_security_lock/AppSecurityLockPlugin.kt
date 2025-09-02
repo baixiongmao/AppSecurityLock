@@ -39,10 +39,16 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private var isBackgroundLockEnabled = false
     private var isListening = false
     private var backgroundTimeout: Long = 60000L // 60秒，单位毫秒
+    
+    // 触摸超时变量
+    private var isTouchTimeoutEnabled = false
+    private var touchTimeout: Long = 30000L // 30秒，单位毫秒
 
     // 定时器
     private var backgroundTimeoutHandler: Handler? = null
     private var backgroundTimeoutRunnable: Runnable? = null
+    private var touchTimeoutHandler: Handler? = null
+    private var touchTimeoutRunnable: Runnable? = null
 
     // 生命周期状态
     private var isInBackground = false
@@ -94,6 +100,25 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 result.success(null)
             }
 
+            "setTouchTimeout" -> {
+                val timeout = call.argument<Double>("timeout") ?: 30.0
+                touchTimeout = (timeout * 1000).toLong() // 转换为毫秒
+                Log.d(TAG, "Touch timeout set to $touchTimeout ms")
+                result.success(null)
+            }
+
+            "setTouchTimeoutEnabled" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                isTouchTimeoutEnabled = enabled
+                Log.d(TAG, "Touch timeout enabled: $isTouchTimeoutEnabled")
+                if (enabled) {
+                    startTouchTimeout()
+                } else {
+                    stopTouchTimeout()
+                }
+                result.success(null)
+            }
+
             "stopBrightnessDetection" -> {
                 stopScreenDetection()
                 result.success(null)
@@ -121,10 +146,16 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         call.argument<Double>("backgroundTimeout")?.let {
             backgroundTimeout = (it * 1000).toLong()
         }
+        call.argument<Boolean>("isTouchTimeoutEnabled")?.let {
+            isTouchTimeoutEnabled = it
+        }
+        call.argument<Double>("touchTimeout")?.let {
+            touchTimeout = (it * 1000).toLong()
+        }
 
         Log.d(
             TAG,
-            "初始化参数 - isScreenLockEnabled: $isScreenLockEnabled, isBackgroundLockEnabled: $isBackgroundLockEnabled, backgroundTimeout: $backgroundTimeout"
+            "初始化参数 - isScreenLockEnabled: $isScreenLockEnabled, isBackgroundLockEnabled: $isBackgroundLockEnabled, backgroundTimeout: $backgroundTimeout, isTouchTimeoutEnabled: $isTouchTimeoutEnabled, touchTimeout: $touchTimeout"
         )
         result.success(null)
     }
@@ -240,8 +271,45 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         }
     }
 
+    // 触摸超时相关方法
+    private fun startTouchTimeout() {
+        stopTouchTimeout()
+        
+        if (!isTouchTimeoutEnabled || isLocked) {
+            return
+        }
+        
+        Log.d(TAG, "开始触摸超时检测，超时时间: ${touchTimeout}ms")
+        
+        touchTimeoutHandler = Handler(Looper.getMainLooper())
+        touchTimeoutRunnable = Runnable {
+            Log.d(TAG, "触摸超时，锁定应用")
+            isLocked = true
+            invokeMethod("onAppLocked", null)
+        }
+        
+        touchTimeoutHandler?.postDelayed(touchTimeoutRunnable!!, touchTimeout)
+    }
+    
+    private fun stopTouchTimeout() {
+        touchTimeoutHandler?.removeCallbacks(touchTimeoutRunnable ?: return)
+        touchTimeoutHandler = null
+        touchTimeoutRunnable = null
+        Log.d(TAG, "停止触摸超时检测")
+    }
+    
+    private fun restartTouchTimeout() {
+        if (!isTouchTimeoutEnabled || isLocked) {
+            return
+        }
+        
+        Log.d(TAG, "重新开始触摸超时检测")
+        startTouchTimeout()
+    }
+
     private fun stopAllTimers() {
         stopBackgroundTimeoutTimer()
+        stopTouchTimeout()
         stopScreenDetection()
     }
 
@@ -260,6 +328,7 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             Log.d(TAG, "App 进入前台")
             isInBackground = false
             stopAllTimers()
+            startTouchTimeout()  // 进入前台时启动触摸超时
             invokeMethod("onEnterForeground", null)
             if (isLocked) {
                 invokeMethod("onAppUnlocked", null)

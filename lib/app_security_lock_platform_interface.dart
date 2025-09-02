@@ -31,6 +31,8 @@ abstract class AppSecurityLockPlatform extends PlatformInterface {
     bool? isScreenLockEnabled,
     bool? isBackgroundLockEnabled,
     double? backgroundTimeout,
+    bool? isTouchTimeoutEnabled,
+    double? touchTimeout,
   }) {
     throw UnimplementedError('init() has not been implemented.');
   }
@@ -80,5 +82,20 @@ abstract class AppSecurityLockPlatform extends PlatformInterface {
   void setScreenLockEnabled(bool enabled) {
     throw UnimplementedError(
         'setScreenLockEnabled() has not been implemented.');
+  }
+
+  /// 设置触摸超时时间（秒）
+  Future<void> setTouchTimeout(double timeoutSeconds) {
+    throw UnimplementedError('setTouchTimeout() has not been implemented.');
+  }
+
+  /// 设置触摸超时是否启用
+  Future<void> setTouchTimeoutEnabled(bool enabled) {
+    throw UnimplementedError(
+        'setTouchTimeoutEnabled() has not been implemented.');
+  }
+
+  void restartTouchTimer() {
+    throw UnimplementedError('restartTouchTimer() has not been implemented.');
   }
 }
