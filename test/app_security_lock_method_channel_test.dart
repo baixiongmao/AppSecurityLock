@@ -12,7 +12,7 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
       channel,
       (MethodCall methodCall) async {
-        return '42';
+        return null; // Most methods return void
       },
     );
   });
@@ -21,7 +21,13 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
   });
 
-  test('getPlatformVersion', () async {
-    expect(await platform.getPlatformVersion(), '42');
+  test('init method', () async {
+    // Test that init method doesn't throw
+    expect(() => platform.init(), returnsNormally);
+  });
+
+  test('setLockEnabled method', () async {
+    // Test that setLockEnabled method doesn't throw
+    expect(() => platform.setLockEnabled(true), returnsNormally);
   });
 }

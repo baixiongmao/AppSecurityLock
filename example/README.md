@@ -1,16 +1,39 @@
-# app_security_lock_example
+# App Security Lock Example
 
-Demonstrates how to use the app_security_lock plugin.
+This example demonstrates how to use the app_security_lock plugin.
 
-## Getting Started
+## Features Demonstrated
 
-This project is a starting point for a Flutter application.
+- Screen lock detection
+- Background timeout configuration
+- Lifecycle monitoring
+- Biometric authentication
 
-A few resources to get you started if this is your first Flutter project:
+## Running the Example
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+1. Clone the repository
+2. Navigate to the example directory
+3. Run `flutter pub get`
+4. Run `flutter run`
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Code Structure
+
+- `lib/main.dart` - Main example application
+- `android/` - Android-specific configuration
+- `ios/` - iOS-specific configuration
+
+The example shows how to:
+- Initialize the plugin with custom settings
+- Handle security events
+- Implement biometric authentication
+- Monitor app lifecycle changes
+
+## Platform Requirements
+
+### iOS
+- iOS 11.0 or later
+- Biometric authentication requires iOS 11.0+
+
+### Android
+- API level 21 (Android 5.0) or later
+- Biometric authentication requires API level 23+

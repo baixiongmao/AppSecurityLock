@@ -9,7 +9,35 @@ class MockAppSecurityLockPlatform
     implements AppSecurityLockPlatform {
 
   @override
-  Future<String?> getPlatformVersion() => Future.value('42');
+  Future<void> init({
+    bool? isScreenLockEnabled,
+    bool? isBackgroundLockEnabled,
+    double? backgroundTimeout,
+  }) => Future.value();
+
+  @override
+  Future<void> setLockEnabled(bool enabled) => Future.value();
+
+  @override
+  void setBackgroundLockEnabled(bool enabled) {}
+
+  @override
+  Future<void> setBackgroundTimeout(double timeoutSeconds) => Future.value();
+
+  @override
+  void setScreenLockEnabled(bool enabled) {}
+
+  @override
+  void setOnEnterForegroundCallback(AppLifecycleCallback? callback) {}
+
+  @override
+  void setOnEnterBackgroundCallback(AppLifecycleCallback? callback) {}
+
+  @override
+  void setOnAppLockedCallback(AppLockedCallback? callback) {}
+
+  @override
+  void setOnAppUnlockedCallback(AppUnlockedCallback? callback) {}
 }
 
 void main() {
@@ -19,11 +47,21 @@ void main() {
     expect(initialPlatform, isInstanceOf<MethodChannelAppSecurityLock>());
   });
 
-  test('getPlatformVersion', () async {
+  test('init method works correctly', () async {
     AppSecurityLock appSecurityLockPlugin = AppSecurityLock();
     MockAppSecurityLockPlatform fakePlatform = MockAppSecurityLockPlatform();
     AppSecurityLockPlatform.instance = fakePlatform;
 
-    expect(await appSecurityLockPlugin.getPlatformVersion(), '42');
+    // Test that init method can be called without throwing
+    expect(() => appSecurityLockPlugin.init(), returnsNormally);
+  });
+
+  test('setLockEnabled method works', () async {
+    AppSecurityLock appSecurityLockPlugin = AppSecurityLock();
+    MockAppSecurityLockPlatform fakePlatform = MockAppSecurityLockPlatform();
+    AppSecurityLockPlatform.instance = fakePlatform;
+
+    // Test that setLockEnabled method can be called without throwing
+    expect(() => appSecurityLockPlugin.setLockEnabled(true), returnsNormally);
   });
 }
