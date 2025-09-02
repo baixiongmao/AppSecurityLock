@@ -7,10 +7,6 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     private var lifecycleChannel: FlutterMethodChannel?
     // 是否锁定
     private var isLocked = false
-    // 是否开启面部生物识别
-    private var isFaceIDEnabled = false
-    // 是否开启密码解锁
-    private var isPasscodeEnabled = false
     // 是否开启锁屏锁定
     private var isScreenLockEnabled = false
 
@@ -47,12 +43,6 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
 
             // 处理初始化参数
             if let args = call.arguments as? [String: Any] {
-                if let faceIDEnabled = args["isFaceIDEnabled"] as? Bool {
-                    isFaceIDEnabled = faceIDEnabled
-                }
-                if let passcodeEnabled = args["isPasscodeEnabled"] as? Bool {
-                    isPasscodeEnabled = passcodeEnabled
-                }
                 if let screenLockEnabled = args["isScreenLockEnabled"] as? Bool {
                     isScreenLockEnabled = screenLockEnabled
                 }
@@ -64,7 +54,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                 }
             }
             print(
-                "Flutter: 初始化参数 - isFaceIDEnabled: \(isFaceIDEnabled), isPasscodeEnabled: \(isPasscodeEnabled), isScreenLockEnabled: \(isScreenLockEnabled), isBackgroundLockEnabled: \(isBackgroundLockEnabled), backgroundTimeout: \(backgroundTimeout)"
+                "Flutter: 初始化参数 -  isScreenLockEnabled: \(isScreenLockEnabled), isBackgroundLockEnabled: \(isBackgroundLockEnabled), backgroundTimeout: \(backgroundTimeout)"
             )
 
             result(nil)
@@ -73,30 +63,6 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                 let enabled = args["enabled"] as? Bool
             {
                 isLocked = enabled
-                result(nil)
-            } else {
-                result(
-                    FlutterError(
-                        code: "INVALID_ARGUMENT", message: "Missing enabled parameter", details: nil
-                    ))
-            }
-        case "setFaceIDEnabled":
-            if let args = call.arguments as? [String: Any],
-                let enabled = args["enabled"] as? Bool
-            {
-                isFaceIDEnabled = enabled
-                result(nil)
-            } else {
-                result(
-                    FlutterError(
-                        code: "INVALID_ARGUMENT", message: "Missing enabled parameter", details: nil
-                    ))
-            }
-        case "setPasscodeEnabled":
-            if let args = call.arguments as? [String: Any],
-                let enabled = args["enabled"] as? Bool
-            {
-                isPasscodeEnabled = enabled
                 result(nil)
             } else {
                 result(
@@ -128,10 +94,6 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                         code: "INVALID_ARGUMENT", message: "Missing enabled parameter", details: nil
                     ))
             }
-        case "isBiometricAvailable":
-            result(isBiometricAvailable())
-        case "getBiometricType":
-            result(getBiometricType())
         // 更新后台超时时间
         case "setBackgroundTimeout":
             if let args = call.arguments as? [String: Any],
@@ -145,18 +107,11 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                         code: "INVALID_ARGUMENT", message: "Missing timeout parameter", details: nil
                     ))
             }
-        case "authenticateWithBiometric":
-            authenticateWithBiometric { success, error in
-                if success {
-                    result(true)
-                } else {
-                    result(
-                        FlutterError(code: "AUTHENTICATION_FAILED", message: error, details: nil))
-                }
-            }
         case "stopBrightnessDetection":
             stopBrightnessDetection()
             result(nil)
+        case "getPlatformVersion":
+            result("iOS " + UIDevice.current.systemVersion)
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -190,8 +145,8 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         stopAllTimers()
         lifecycleChannel?.invokeMethod("onEnterForeground", arguments: nil)
         if isLocked {
-            // 调用生物识别
-            startBiometricAuthentication()
+            // 通知前台解锁
+            lifecycleChannel?.invokeMethod("onAppUnlocked", arguments: nil)
         }
     }
 
@@ -204,149 +159,16 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         startBackgroundTimeoutTimer()
     }
 
-    //开始生物识别
-    private func startBiometricAuthentication() {
-        if isFaceIDEnabled && isBiometricAvailable() {
-            // 开始面部生物识别
-            authenticateWithBiometric { [weak self] success, error in
-                DispatchQueue.main.async {
-                    if success {
-                        self?.isLocked = false
-                        // 触发统一的认证回调 - 成功
-                        self?.lifecycleChannel?.invokeMethod(
-                            "onAuthentication", arguments: ["success": true, "type": "biometric"])
-                    } else {
-                        if self?.isPasscodeEnabled == true {
-                            self?.startPasscodeAuthentication()
-                        } else {
-                            // 触发统一的认证回调 - 失败
-                            self?.lifecycleChannel?.invokeMethod(
-                                "onAuthentication",
-                                arguments: ["success": false, "error": error ?? "生物识别失败"])
-                        }
-                    }
-                }
-            }
-        } else if isPasscodeEnabled {
-            // 调用密码解锁
-            startPasscodeAuthentication()
-        }
-    }
-
-    // 判断生物识别是否可用
-    private func isBiometricAvailable() -> Bool {
-        let context = LAContext()
-        var error: NSError?
-
-        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
-            return true
-        }
-        return false
-    }
-
-    // 获取生物识别类型
-    private func getBiometricType() -> String {
-        let context = LAContext()
-        var error: NSError?
-
-        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
-        else {
-            return "none"
-        }
-
-        if #available(iOS 11.0, *) {
-            switch context.biometryType {
-            case .faceID:
-                return "faceID"
-            case .touchID:
-                return "touchID"
-            case .opticID:
-                return "opticID"
-            case .none:
-                return "none"
-            @unknown default:
-                return "unknown"
-            }
-        } else {
-            return "touchID"
-        }
-    }
-
-    // 执行生物识别认证
-    private func authenticateWithBiometric(completion: @escaping (Bool, String?) -> Void) {
-        let context = LAContext()
-        let reason = "请使用生物识别进行身份验证"
-
-        context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) {
-            success, error in
-            if success {
-                completion(true, nil)
-            } else {
-                var errorMessage = "生物识别失败"
-                if let error = error as? LAError {
-                    switch error.code {
-                    case .userCancel:
-                        errorMessage = "用户取消了认证"
-                    case .userFallback:
-                        errorMessage = "用户选择了其他认证方式"
-                    case .biometryNotAvailable:
-                        errorMessage = "生物识别不可用"
-                    case .biometryNotEnrolled:
-                        errorMessage = "未设置生物识别"
-                    case .biometryLockout:
-                        errorMessage = "生物识别被锁定"
-                    default:
-                        errorMessage = "认证失败: \(error.localizedDescription)"
-                    }
-                }
-                completion(false, errorMessage)
-            }
-        }
-    }
-
-    // 开始密码解锁
-    private func startPasscodeAuthentication() {
-        if isPasscodeEnabled {
-            let context = LAContext()
-            let reason = "请输入设备密码进行身份验证"
-
-            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) {
-                [weak self] success, error in
-                DispatchQueue.main.async {
-                    if success {
-                        self?.isLocked = false
-                        // 触发统一的认证回调 - 成功
-                        self?.lifecycleChannel?.invokeMethod(
-                            "onAuthentication", arguments: ["success": true, "type": "passcode"])
-                    } else {
-                        var errorMessage = "密码认证失败"
-                        if let error = error as? LAError {
-                            switch error.code {
-                            case .userCancel:
-                                errorMessage = "用户取消了认证"
-                            case .systemCancel:
-                                errorMessage = "系统取消了认证"
-                            default:
-                                errorMessage = "认证失败: \(error.localizedDescription)"
-                            }
-                        }
-                        // 触发统一的认证回调 - 失败
-                        self?.lifecycleChannel?.invokeMethod(
-                            "onAuthentication",
-                            arguments: ["success": false, "error": errorMessage])
-                    }
-                }
-            }
-        }
-    }
-
     // 开始循环，每秒检测手机屏幕亮度
     private func startBrightnessDetection() {
         // 如果已经有定时器在运行，先停止它
         stopBrightnessDetection()
-
+        if isLocked {
+            print("AppSecurityLock: App is already locked, skipping brightness detection")
+            return
+        }
         print("AppSecurityLock: Starting brightness detection")
-        if isScreenLockEnabled {
+        if isScreenLockEnabled && !isLocked {
             brightnessTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) {
                 [weak self] _ in
                 self?.checkScreenBrightness()
@@ -357,6 +179,10 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     // 检查屏幕亮度并处理锁定逻辑
     private func checkScreenBrightness() {
         let currentBrightness = UIScreen.main.brightness
+        if isLocked {
+            print("AppSecurityLock: App is already locked, skipping brightness check")
+            return
+        }
         print("AppSecurityLock: Current screen brightness: \(currentBrightness)")
 
         if currentBrightness == 0.0 && !isLocked {

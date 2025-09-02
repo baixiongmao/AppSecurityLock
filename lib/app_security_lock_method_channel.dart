@@ -12,7 +12,7 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
   AppLifecycleCallback? _onEnterForegroundCallback;
   AppLifecycleCallback? _onEnterBackgroundCallback;
   AppLockedCallback? _onAppLockedCallback;
-  AuthenticationCallback? _onAuthenticationCallback;
+  AppUnlockedCallback? _onAppUnlockedCallback;
 
   MethodChannelAppSecurityLock() {
     // 设置方法调用处理器来接收来自原生端的回调
@@ -30,17 +30,8 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
       case 'onAppLocked':
         _onAppLockedCallback?.call();
         break;
-      case 'onAuthentication':
-        final arguments = call.arguments as Map<String, dynamic>?;
-        final success = arguments?['success'] as bool? ?? false;
-        if (success) {
-          final type = arguments?['type'] as String?;
-          _onAuthenticationCallback?.call(true, type);
-        } else {
-          final error = arguments?['error'] as String?;
-          _onAuthenticationCallback?.call(false, error);
-        }
-        break;
+      case 'onAppUnlocked':
+        _onAppUnlockedCallback?.call();
       default:
         throw PlatformException(
           code: 'Unimplemented',
@@ -51,28 +42,13 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
   }
 
   @override
-  Future<String?> getPlatformVersion() async {
-    final version =
-        await methodChannel.invokeMethod<String>('getPlatformVersion');
-    return version;
-  }
-
-  @override
   Future<void> init({
-    bool? isFaceIDEnabled,
-    bool? isPasscodeEnabled,
     bool? isScreenLockEnabled,
     bool? isBackgroundLockEnabled,
     double? backgroundTimeout,
   }) {
     final Map<String, dynamic> arguments = {};
 
-    if (isFaceIDEnabled != null) {
-      arguments['isFaceIDEnabled'] = isFaceIDEnabled;
-    }
-    if (isPasscodeEnabled != null) {
-      arguments['isPasscodeEnabled'] = isPasscodeEnabled;
-    }
     if (isScreenLockEnabled != null) {
       arguments['isScreenLockEnabled'] = isScreenLockEnabled;
     }
@@ -86,87 +62,54 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
         'init', arguments.isEmpty ? null : arguments);
   }
 
+  /// 设置应用进入前台的回调
   @override
   void setOnEnterForegroundCallback(AppLifecycleCallback? callback) {
     _onEnterForegroundCallback = callback;
   }
 
+  /// 设置应用进入后台的回调
   @override
   void setOnEnterBackgroundCallback(AppLifecycleCallback? callback) {
     _onEnterBackgroundCallback = callback;
   }
 
+  ///锁定回调
   @override
   void setOnAppLockedCallback(AppLockedCallback? callback) {
     _onAppLockedCallback = callback;
   }
 
+  // 通知前台解锁
   @override
   void setOnAppUnlockedCallback(AppUnlockedCallback? callback) {
-    // 这里可以添加解锁回调的处理逻辑
-    // 当前我们主要通过 setOnAuthenticationCallback 来处理解锁逻辑
+    _onAppUnlockedCallback = callback;
   }
 
+  /// 设置锁定状态
   @override
   Future<void> setLockEnabled(bool enabled) {
     return methodChannel.invokeMethod('setLockEnabled', {'enabled': enabled});
   }
 
-  @override
-  Future<void> setFaceIDEnabled(bool enabled) {
-    return methodChannel.invokeMethod('setFaceIDEnabled', {'enabled': enabled});
-  }
-
-  @override
-  Future<void> setPasscodeEnabled(bool enabled) {
-    return methodChannel
-        .invokeMethod('setPasscodeEnabled', {'enabled': enabled});
-  }
-
+  /// 设置后台超时时间（秒）
   @override
   Future<void> setBackgroundLockEnabled(bool enabled) {
     return methodChannel
         .invokeMethod('setBackgroundLockEnabled', {'enabled': enabled});
   }
 
+  /// 更新后台锁定功能状态
   @override
   Future<void> setBackgroundTimeout(double timeoutSeconds) {
     return methodChannel
         .invokeMethod('setBackgroundTimeout', {'timeout': timeoutSeconds});
   }
 
+  /// 更新屏幕锁定功能状态
   @override
   Future<void> setScreenLockEnabled(bool enabled) {
     return methodChannel
         .invokeMethod('setScreenLockEnabled', {'enabled': enabled});
-  }
-
-  @override
-  Future<bool> isBiometricAvailable() async {
-    final result =
-        await methodChannel.invokeMethod<bool>('isBiometricAvailable');
-    return result ?? false;
-  }
-
-  @override
-  Future<String> getBiometricType() async {
-    final result = await methodChannel.invokeMethod<String>('getBiometricType');
-    return result ?? 'none';
-  }
-
-  @override
-  Future<bool> authenticateWithBiometric() async {
-    try {
-      final result =
-          await methodChannel.invokeMethod<bool>('authenticateWithBiometric');
-      return result ?? false;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  @override
-  void setOnAuthenticationCallback(AuthenticationCallback? callback) {
-    _onAuthenticationCallback = callback;
   }
 }
