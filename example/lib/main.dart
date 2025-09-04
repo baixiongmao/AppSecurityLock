@@ -17,7 +17,7 @@ class _MyAppState extends State<MyApp> {
   // 当前是否锁定
   bool isLocked = false;
   bool isBackgroundLocked = false;
-  bool isScreenLocked = false;
+  bool isScreenLocked = true;
   final List<String> _logs = [];
 
   void _addLog(String message) {
@@ -52,7 +52,7 @@ class _MyAppState extends State<MyApp> {
       isScreenLockEnabled: isScreenLocked,
       isBackgroundLockEnabled: isBackgroundLocked,
       backgroundTimeout: 5.0,
-      isTouchTimeoutEnabled: true,
+      isTouchTimeoutEnabled: false,
       touchTimeout: 10.0, // 30 seconds of inactivity
     );
   }

@@ -1,36 +1,33 @@
-## 0.0.5
+## 0.0.6
 
-### Enhanced Screen Monitoring and Touch Timeout Improvements
+### Enhanced iOS Screen Lock Detection
 
-* **Always-On Screen Monitoring**: Screen broadcast receivers now remain active regardless of screen lock enabled state
-* **Improved Condition Checking**: Enhanced screen lock detection logic with proper conditional validation
-* **Optimized Touch Timeout Management**: Better touch timeout restart mechanism after device unlock
-* **Cross-Platform Consistency**: Unified behavior between iOS and Android implementations
+* **Improved Production Reliability**: Fixed iOS screen lock detection not working in production builds
+* **Native iOS Notification System**: Replaced unreliable brightness detection with system-level `protectedData` notifications
+* **Superior Lock Detection**: Uses `UIApplication.protectedDataWillBecomeUnavailableNotification` and `protectedDataDidBecomeAvailableNotification` for accurate screen lock events
+* **Production-Ready**: Eliminates brightness threshold issues that caused failures in release builds
 
-### Platform-Specific Enhancements
+### iOS Implementation Changes
 
-#### Android Improvements
-- ✅ **Persistent Screen Monitoring**: BroadcastReceiver now stays registered and only checks `isScreenLockEnabled` before performing lock operations
-- ✅ **Enhanced Touch Timeout**: Fixed touch timeout not restarting properly after device unlock/restart
-- ✅ **Better State Management**: Improved conditional logic for screen lock detection
-- ✅ **Resource Optimization**: More efficient timer and receiver management
+- ✅ **New Lock Detection Method**: Implemented `protectedData` notification observers for reliable screen lock detection
+- ✅ **Removed Brightness Detection**: Completely removed unreliable brightness-based screen lock detection
+- ✅ **System-Level Integration**: Uses iOS native notification center for optimal performance
+- ✅ **Production Build Compatible**: Resolves screen lock detection failures in production/release builds
 
-#### iOS Consistency
-- ✅ **Maintained Code Quality**: Preserved iOS implementation's clean architecture
-- ✅ **Touch Event Excellence**: Continued leveraging UIGestureRecognizer system advantages
+### Technical Improvements
+
+- 🔧 Added `screenLocked()` and `screenUnlocked()` callback methods
+- 🔧 Enhanced `startListen()` method with protectedData notification observers
+- 🔧 Cleaned up brightness timer and related detection methods
+- 🔧 Improved iOS app lifecycle integration
+- 🔧 Optimized notification center observer management
 
 ### Bug Fixes
 
-- 🐛 Fixed touch timeout not restarting after `ACTION_USER_PRESENT` event
-- 🐛 Improved screen lock detection conditional logic flow
-- 🐛 Enhanced broadcast receiver lifecycle management
-- 🐛 Optimized timer management in background operations
-
-### API Improvements
-
-- ✅ More reliable screen lock detection behavior
-- ✅ Consistent touch timeout functionality across platforms
-- ✅ Better error handling and logging
+- 🐛 Fixed screen lock detection not working in iOS production builds
+- 🐛 Resolved brightness threshold reliability issues
+- 🐛 Improved app state monitoring accuracy
+- 🐛 Enhanced notification system performance
 
 ## 0.0.4
 

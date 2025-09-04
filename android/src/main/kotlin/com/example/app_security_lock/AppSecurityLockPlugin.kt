@@ -131,8 +131,7 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             }
 
             "stopBrightnessDetection" -> {
-                // 屏幕监听器现在始终保持开启，不再通过此方法停止
-                Log.d(TAG, "屏幕监听器保持开启状态")
+                stopScreenDetection()
                 result.success(null)
             }
 
@@ -180,8 +179,8 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             startTouchTimeout()
         }
         
-        // 始终启动屏幕监听器，但锁定操作基于isScreenLockEnabled状态
-        startScreenDetection()
+        // 注意：屏幕锁定检测只在用户显式调用setScreenLockEnabled(true)时启动
+        // 这里不自动启动屏幕检测，即使isScreenLockEnabled为true
         
         result.success(null)
     }
@@ -209,10 +208,13 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     // 设置屏幕锁定检测
     private fun setScreenLockEnabled(enabled: Boolean) {
         isScreenLockEnabled = enabled
-        Log.d(TAG, "Screen lock enabled: $enabled (屏幕监听器始终保持开启)")
+        Log.d(TAG, "Screen lock enabled: $enabled")
         
-        // 屏幕监听器始终保持开启状态
-        // 只有isScreenLockEnabled=true时才会执行锁定操作
+        if (enabled) {
+            startScreenDetection()
+        } else {
+            stopScreenDetection()
+        }
     }
 
     // 设置后台锁定
@@ -267,7 +269,17 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private fun startScreenDetection() {
         stopScreenDetection()
 
-        Log.d(TAG, "开始屏幕状态监听器（始终开启）")
+        if (!isScreenLockEnabled) {
+            Log.d(TAG, "屏幕锁定检测未启用")
+            return
+        }
+
+        if (isLocked) {
+            Log.d(TAG, "应用已锁定，跳过屏幕检测")
+            return
+        }
+
+        Log.d(TAG, "开始屏幕状态检测")
         initScreenBroadcastReceiver()
         registerScreenReceiver()
     }
@@ -278,41 +290,22 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 override fun onReceive(context: Context, intent: Intent) {
                     when (intent.action) {
                         Intent.ACTION_SCREEN_OFF -> {
-                            Log.d(TAG, "屏幕关闭事件")
-                            
-                            // 检查是否启用了屏幕锁定监听
-                            if (!isScreenLockEnabled) {
-                                Log.d(TAG, "屏幕锁定监听未启用，跳过")
-                                return
+                            Log.d(TAG, "屏幕关闭，锁定应用")
+                            if (!isLocked) {
+                                isLocked = true
+                                stopAllTimers()
+                                removeTouchListener()
+                                invokeMethod("onAppLocked", null)
                             }
-                            
-                            // 检查应用是否已经锁定
-                            if (isLocked) {
-                                Log.d(TAG, "应用已锁定，跳过重复锁定")
-                                return
-                            }
-                            
-                            // 执行应用锁定
-                            Log.d(TAG, "执行应用锁定")
-                            isLocked = true
-                            stopAllTimers()
-                            removeTouchListener()
-                            invokeMethod("onAppLocked", null)
                         }
                         Intent.ACTION_SCREEN_ON -> {
                             Log.d(TAG, "屏幕开启")
-                            // 屏幕开启时不做任何操作，等待用户解锁
+                            // 屏幕开启时不自动解锁，需要用户解锁
                         }
                         Intent.ACTION_USER_PRESENT -> {
                             Log.d(TAG, "用户解锁设备")
-                            // 用户解锁设备时不自动解锁应用
-                            // 应用解锁由用户通过UI操作控制
-                            
-                            // 如果应用未锁定且启用了触摸超时，重新启动触摸超时计时器
-                            if (!isLocked && isTouchTimeoutEnabled && touchTimeout > 0) {
-                                Log.d(TAG, "设备解锁后重新启动触摸超时")
-                                restartTouchTimeout()
-                            }
+                            // 当用户解锁设备时，可以选择性地解锁应用
+                            // 这里暂时不自动解锁应用，由应用层决定
                         }
                     }
                 }
@@ -533,7 +526,7 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private fun stopAllTimers() {
         stopBackgroundTimeoutTimer()
         stopTouchTimeout()
-        // 不停止屏幕检测，保持屏幕监听器始终开启
+        stopScreenDetection()
     }
 
     private fun invokeMethod(method: String, arguments: Any?) {
@@ -645,7 +638,6 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         Log.d(TAG, "onDetachedFromEngine")
         channel.setMethodCallHandler(null)
         stopAllTimers()
-        stopScreenDetection() // 插件销毁时停止屏幕监听器
         removeTouchListener()
         
         context?.let { ctx ->

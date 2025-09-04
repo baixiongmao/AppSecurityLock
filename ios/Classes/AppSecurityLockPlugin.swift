@@ -17,8 +17,6 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     // 后台超时时间（秒）
     private var backgroundTimeout: TimeInterval = 60.0
 
-    // 亮度检测定时器
-    private var brightnessTimer: Timer?
     // 后台超时定时器
     private var backgroundTimeoutTimer: Timer?
 
@@ -163,9 +161,6 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         case "restartTouchTimer":
             restartTouchTimerFromButton()
             result(nil)
-        case "stopBrightnessDetection":
-            stopBrightnessDetection()
-            result(nil)
         case "getPlatformVersion":
             result("iOS " + UIDevice.current.systemVersion)
         default:
@@ -194,6 +189,21 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             name: UIApplication.didEnterBackgroundNotification,
             object: nil)
 
+        // 注册屏幕锁定监听 - 更可靠的方法
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenLocked),
+            name: UIApplication.protectedDataWillBecomeUnavailableNotification,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenUnlocked),
+            name: UIApplication.protectedDataDidBecomeAvailableNotification,
+            object: nil
+        )
+
         // 触摸事件监听将在 init 方法中根据配置决定是否启动
     }
 
@@ -218,59 +228,30 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     @objc private func onEnterBackground() {
         print("App 进入后台")
         lifecycleChannel?.invokeMethod("onEnterBackground", arguments: nil)
-        // 开始检测屏幕亮度
-        startBrightnessDetection()
+        
         // 开始后台超时任务
         startBackgroundTimeoutTimer()
     }
 
-    // 开始循环，每秒检测手机屏幕亮度
-    private func startBrightnessDetection() {
-        // 如果已经有定时器在运行，先停止它
-        stopBrightnessDetection()
-        if isLocked {
-            print("AppSecurityLock: App is already locked, skipping brightness detection")
-            return
-        }
-        print("AppSecurityLock: Starting brightness detection")
+    // 屏幕锁定回调
+    @objc func screenLocked() {
+        print("AppSecurityLock: 屏幕锁定检测到")
+        
+        // 只有在启用屏幕锁定功能且应用未锁定时才执行锁定
         if isScreenLockEnabled && !isLocked {
-            brightnessTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) {
-                [weak self] _ in
-                self?.checkScreenBrightness()
-            }
+            print("AppSecurityLock: 执行应用锁定")
+            isLocked = true
+            stopAllTimers()
+            removeTouchEventListeners()
+            lifecycleChannel?.invokeMethod("onAppLocked", arguments: nil)
         }
     }
 
-    // 检查屏幕亮度并处理锁定逻辑
-    private func checkScreenBrightness() {
-        let currentBrightness = UIScreen.main.brightness
-        if isLocked {
-            print("AppSecurityLock: App is already locked, skipping brightness check")
-            return
-        }
-        print("AppSecurityLock: Current screen brightness: \(currentBrightness)")
-
-        if currentBrightness == 0.0 && !isLocked {
-            print("AppSecurityLock: Screen brightness is 0.0, locking app")
-            DispatchQueue.main.async { [weak self] in
-                // 锁定
-                self?.isLocked = true
-                print("AppSecurityLock: App is locked")
-                // 锁定回调
-                self?.lifecycleChannel?.invokeMethod("onAppLocked", arguments: nil)
-                // 停止亮度检测，因为应用已被锁定
-                self?.stopAllTimers()
-            }
-        }
-    }
-
-    // 停止亮度检测
-    private func stopBrightnessDetection() {
-        if let timer = brightnessTimer {
-            print("AppSecurityLock: Stopping brightness detection")
-            timer.invalidate()
-            brightnessTimer = nil
-        }
+    // 屏幕解锁回调
+    @objc func screenUnlocked() {
+        print("AppSecurityLock: 屏幕解锁检测到")
+        // 注意：这里不自动解锁应用，需要用户手动解锁
+        // 应用解锁由用户通过UI操作控制
     }
 
     // 设置后台超时时间
@@ -326,9 +307,6 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     private func stopAllTimers() {
         if backgroundTimeoutTimer != nil {
             stopBackgroundTimeoutTimer()
-        }
-        if brightnessTimer != nil {
-            stopBrightnessDetection()
         }
         if touchTimer != nil {
             stopTouchTimer()
