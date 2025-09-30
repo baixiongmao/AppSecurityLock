@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:app_security_lock/app_security_lock.dart';
 
@@ -54,6 +55,7 @@ class _MyAppState extends State<MyApp> {
       backgroundTimeout: 5.0,
       isTouchTimeoutEnabled: false,
       touchTimeout: 10.0, // 30 seconds of inactivity
+      debug: kDebugMode,
     );
   }
 
