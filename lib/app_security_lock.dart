@@ -21,6 +21,7 @@ class AppSecurityLock {
     double? backgroundTimeout,
     bool? isTouchTimeoutEnabled,
     double? touchTimeout,
+    bool? debug,
   }) {
     return AppSecurityLockPlatform.instance.init(
       isScreenLockEnabled: isScreenLockEnabled,
@@ -28,6 +29,7 @@ class AppSecurityLock {
       backgroundTimeout: backgroundTimeout,
       isTouchTimeoutEnabled: isTouchTimeoutEnabled,
       touchTimeout: touchTimeout,
+      debug: debug,
     );
   }
 

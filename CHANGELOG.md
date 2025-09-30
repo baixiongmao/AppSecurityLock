@@ -1,3 +1,25 @@
+## 0.0.7
+
+### Debug Logging Enhancement
+
+* **New Debug Field**: Added debug parameter to control log output for better development experience
+* **Configurable Logging**: Developers can now enable/disable plugin logs based on debug mode
+* **Development Support**: Enhanced debugging capabilities for easier troubleshooting during development
+
+### New Features
+
+- ✅ **Debug Control**: New debug field parameter to toggle log output
+- ✅ **Conditional Logging**: Logs are now shown only when debug mode is enabled
+- ✅ **Developer Experience**: Improved debugging workflow with controllable log verbosity
+- ✅ **Production Ready**: Clean log output in production builds when debug is disabled
+
+### Technical Improvements
+
+- 🔧 Added debug parameter support across all platform implementations
+- 🔧 Enhanced logging system with conditional output
+- 🔧 Improved development workflow with debug controls
+- 🔧 Optimized log management for production builds
+
 ## 0.0.6
 
 ### Enhanced iOS Screen Lock Detection

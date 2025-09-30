@@ -17,6 +17,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     // 后台超时时间（秒）
     private var backgroundTimeout: TimeInterval = 60.0
 
+    // debug 模式
+    private var isDebugMode: Bool = false
+
     // 后台超时定时器
     private var backgroundTimeoutTimer: Timer?
 
@@ -62,6 +65,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                 if let touchTimeoutSeconds = args["touchTimeout"] as? Double {
                     touchTimeout = touchTimeoutSeconds
                 }
+                if let debug = args["debug"] as? Bool {
+                    isDebugMode = debug
+                }
             }
             // 只在首次调用时启动监听
             if !isListening {
@@ -73,10 +79,12 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                 setupTouchEventListeners()
                 startTouchTimer()
             }
-            
-            print(
-                "Flutter: 初始化参数 \n  isScreenLockEnabled: \(isScreenLockEnabled),\n  isBackgroundLockEnabled: \(isBackgroundLockEnabled),\n  backgroundTimeout: \(backgroundTimeout),\n  isTouchTimeoutEnabled: \(isTouchTimeoutEnabled),\n  touchTimeout: \(touchTimeout)"
-            )
+
+            if isDebugMode {
+                print(
+                    "Flutter: 初始化参数 \n  isScreenLockEnabled: \(isScreenLockEnabled),\n  isBackgroundLockEnabled: \(isBackgroundLockEnabled),\n  backgroundTimeout: \(backgroundTimeout),\n  isTouchTimeoutEnabled: \(isTouchTimeoutEnabled),\n  touchTimeout: \(touchTimeout)"
+                )
+            }
 
             result(nil)
         // 更新锁定状态
@@ -85,7 +93,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                 let enabled = args["enabled"] as? Bool
             {
                 isLocked = enabled
-                print("AppSecurityLock: Lock state changed to: \(enabled)")
+                if isDebugMode {
+                    print("Flutter: 设置锁定状态为 \(isLocked)")
+                }
                 
                 result(nil)
             } else {
@@ -257,12 +267,16 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     // 设置后台超时时间
     func setBackgroundTimeout(_ timeout: TimeInterval) {
         backgroundTimeout = timeout
-        print("AppSecurityLock: Background timeout set to \(backgroundTimeout) seconds")
+        if isDebugMode {
+            print("AppSecurityLock: Background timeout set to \(backgroundTimeout) seconds")
+        }
         //    判断后台任务是否在运行
         if backgroundTimeoutTimer != nil {
             // 停止后台任务
             stopBackgroundTimeoutTimer()
-            print("AppSecurityLock: Background timeout timer is already running")
+            if isDebugMode {
+                print("AppSecurityLock: Background timeout timer is already running")
+            }
         }
     }
 
@@ -271,8 +285,10 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         // 如果已经有定时器在运行，先停止它
         stopBackgroundTimeoutTimer()
 
-        print(
-            "AppSecurityLock: Starting background timeout timer with \(backgroundTimeout) seconds")
+        if isDebugMode {
+            print(
+                "AppSecurityLock: Starting background timeout timer with \(backgroundTimeout) seconds")
+        }
         if isBackgroundLockEnabled {
             backgroundTimeoutTimer = Timer.scheduledTimer(
                 withTimeInterval: backgroundTimeout, repeats: false
@@ -283,11 +299,15 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         }
     }  // 后台超时任务
     private func handleBackgroundTimeout() {
-        print("AppSecurityLock: Background timeout occurred")
+        if isDebugMode {
+            print("AppSecurityLock: Background timeout occurred")
+        }
         // 处理后台超时逻辑
         // 锁定程序
         self.isLocked = true
-        print("AppSecurityLock: App is locked due to background timeout")
+        if isDebugMode {
+            print("AppSecurityLock: App is locked due to background timeout")
+        }
         // 触发锁定回调
         self.lifecycleChannel?.invokeMethod("onAppLocked", arguments: nil)
         // 停止后台超时定时器
@@ -297,7 +317,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     // 停止后台超时定时器
     private func stopBackgroundTimeoutTimer() {
         if let timer = backgroundTimeoutTimer {
-            print("AppSecurityLock: Stopping background timeout timer")
+            if isDebugMode {
+                print("AppSecurityLock: Stopping background timeout timer")
+            }
             timer.invalidate()
             backgroundTimeoutTimer = nil
         }
@@ -317,7 +339,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     private func setupTouchEventListeners() {
         // 延迟设置，确保UI已经加载
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            print("AppSecurityLock: Setting up touch event listeners")
+            if isDebugMode {
+                print("AppSecurityLock: Setting up touch event listeners")
+            }
             self?.addTouchEventListeners()
         }
     }
@@ -349,7 +373,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         panGestureRecognizer?.delaysTouchesEnded = false
         window.addGestureRecognizer(panGestureRecognizer!)
 
-        print("AppSecurityLock: Touch event listeners added successfully")
+        if isDebugMode {
+            print("AppSecurityLock: Touch event listeners added successfully")
+        }
     }
 
     @objc private func handleUserTouch() {
@@ -377,13 +403,17 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             panGestureRecognizer = nil
         }
 
-        print("AppSecurityLock: Touch event listeners removed")
+        if isDebugMode {
+            print("AppSecurityLock: Touch event listeners removed")
+        }
     }
 
     // 设置触摸超时时间
     func setTouchTimeout(_ timeout: TimeInterval) {
         touchTimeout = timeout
-        print("AppSecurityLock: Touch timeout set to \(touchTimeout) seconds")
+        if isDebugMode {
+            print("AppSecurityLock: Touch timeout set to \(touchTimeout) seconds")
+        }
         // 如果触摸定时器正在运行，重启它
         if touchTimer != nil {
             restartTouchTimer()
@@ -393,7 +423,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     // 设置触摸超时是否启用
     func setTouchTimeoutEnabled(_ enabled: Bool) {
         isTouchTimeoutEnabled = enabled
-        print("AppSecurityLock: Touch timeout enabled: \(isTouchTimeoutEnabled)")
+        if isDebugMode {
+            print("AppSecurityLock: Touch timeout enabled: \(isTouchTimeoutEnabled)")
+        }
 
         if enabled {
             setupTouchEventListeners()
@@ -409,7 +441,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         guard isTouchTimeoutEnabled && !isLocked else { return }
 
         stopTouchTimer()
-        print("AppSecurityLock: Starting touch timer with \(touchTimeout) seconds")
+        if isDebugMode {
+            print("AppSecurityLock: Starting touch timer with \(touchTimeout) seconds")
+        }
 
         touchTimer = Timer.scheduledTimer(withTimeInterval: touchTimeout, repeats: false) {
             [weak self] _ in
@@ -421,7 +455,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     private func restartTouchTimer() {
         guard isTouchTimeoutEnabled && !isLocked else { return }
 
-        print("AppSecurityLock: Restarting touch timer")
+        if isDebugMode {
+            print("AppSecurityLock: Restarting touch timer")
+        }
         // 只重启定时器，不需要重新设置监听器
         startTouchTimer()
     }
@@ -430,7 +466,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     private func restartTouchTimerFromButton() {
         guard isTouchTimeoutEnabled && !isLocked else { return }
 
-        print("AppSecurityLock: Restarting touch timer from button")
+        if isDebugMode {
+            print("AppSecurityLock: Restarting touch timer from button")
+        }
         // 重新设置触摸事件监听器和重启定时器
         setupTouchEventListeners()
         startTouchTimer()
@@ -439,7 +477,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     // 停止触摸定时器
     private func stopTouchTimer() {
         if let timer = touchTimer {
-            print("AppSecurityLock: Stopping touch timer")
+            if isDebugMode {
+                print("AppSecurityLock: Stopping touch timer")
+            }
             timer.invalidate()
             touchTimer = nil
         }
@@ -447,14 +487,18 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
 
     // 处理触摸超时
     private func handleTouchTimeout() {
-        print("AppSecurityLock: Touch timeout occurred")
+        if isDebugMode {
+            print("AppSecurityLock: Touch timeout occurred")
+        }
 
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
 
             // 锁定应用
             self.isLocked = true
-            print("AppSecurityLock: App is locked due to touch timeout")
+            if self.isDebugMode {
+                print("AppSecurityLock: App is locked due to touch timeout")
+            }
 
             // 触发锁定回调
             self.lifecycleChannel?.invokeMethod("onAppLocked", arguments: nil)

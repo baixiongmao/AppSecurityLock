@@ -33,6 +33,7 @@ abstract class AppSecurityLockPlatform extends PlatformInterface {
     double? backgroundTimeout,
     bool? isTouchTimeoutEnabled,
     double? touchTimeout,
+    bool? debug,
   }) {
     throw UnimplementedError('init() has not been implemented.');
   }

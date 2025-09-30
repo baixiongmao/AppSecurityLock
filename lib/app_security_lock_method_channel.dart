@@ -48,6 +48,7 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
     double? backgroundTimeout,
     bool? isTouchTimeoutEnabled,
     double? touchTimeout,
+    bool? debug,
   }) {
     final Map<String, dynamic> arguments = {};
 
@@ -65,6 +66,9 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
     }
     if (touchTimeout != null) {
       arguments['touchTimeout'] = touchTimeout;
+    }
+    if (debug != null) {
+      arguments['debug'] = debug;
     }
     return methodChannel.invokeMethod(
         'init', arguments.isEmpty ? null : arguments);
