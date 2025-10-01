@@ -178,6 +178,7 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 "isTouchTimeoutEnabled: $isTouchTimeoutEnabled, " +
             "touchTimeout: $touchTimeout"
         )
+        }
         
         // 启动触摸超时功能（如果启用）
         if (isTouchTimeoutEnabled) {
