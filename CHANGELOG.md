@@ -1,3 +1,6 @@
+## 0.0.7-fix
+添加安卓缺失的括号
+
 ## 0.0.7
 
 ### Debug Logging Enhancement

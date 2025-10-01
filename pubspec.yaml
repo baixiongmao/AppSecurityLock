@@ -1,6 +1,6 @@
 name: app_security_lock
 description: "A comprehensive Flutter plugin for app security features including screen lock detection, background timeout, and lifecycle monitoring."
-version: 0.0.7
+version: 0.0.7-fix
 homepage: https://github.com/baixiongmao/AppSecurityLock
 repository: https://github.com/baixiongmao/AppSecurityLock
 issue_tracker: https://github.com/baixiongmao/AppSecurityLock/issues

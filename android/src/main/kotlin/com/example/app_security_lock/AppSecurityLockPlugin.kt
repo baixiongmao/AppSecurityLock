@@ -77,7 +77,9 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             (context as Application).registerActivityLifecycleCallbacks(this)
         }
         
-        Log.d(TAG, "AppSecurityLockPlugin attached to engine")
+        if (debug) {
+            Log.d(TAG, "Plugin attached to engine")
+        }
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
@@ -176,7 +178,7 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 "isBackgroundLockEnabled: $isBackgroundLockEnabled, " +
                 "backgroundTimeout: $backgroundTimeout, " +
                 "isTouchTimeoutEnabled: $isTouchTimeoutEnabled, " +
-            "touchTimeout: $touchTimeout"
+                "touchTimeout: $touchTimeout"
         )
         }
         
