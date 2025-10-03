@@ -339,7 +339,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     private func setupTouchEventListeners() {
         // 延迟设置，确保UI已经加载
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            if isDebugMode {
+            if self?.isDebugMode == true {
                 print("AppSecurityLock: Setting up touch event listeners")
             }
             self?.addTouchEventListeners()
