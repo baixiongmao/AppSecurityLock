@@ -32,6 +32,7 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
         break;
       case 'onAppUnlocked':
         _onAppUnlockedCallback?.call();
+        break;
       default:
         throw PlatformException(
           code: 'Unimplemented',
