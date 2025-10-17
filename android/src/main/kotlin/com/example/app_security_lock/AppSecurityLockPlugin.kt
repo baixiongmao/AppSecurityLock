@@ -54,6 +54,10 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private var backgroundTimeoutRunnable: Runnable? = null
     private var touchTimeoutHandler: Handler? = null
     private var touchTimeoutRunnable: Runnable? = null
+    
+    // 倒计时相关
+    private var touchStartTime: Long = 0L
+    private var backgroundStartTime: Long = 0L
 
     // 生命周期状态
     private var isInBackground = false
@@ -400,11 +404,41 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         if(debug){
             Log.d(TAG, "开始后台超时检测，超时时间: ${backgroundTimeout}ms")
         }
+        
+        backgroundStartTime = System.currentTimeMillis()
         backgroundTimeoutHandler = Handler(Looper.getMainLooper())
-        backgroundTimeoutRunnable = Runnable {
-            handleBackgroundTimeout()
+        
+        // 创建支持倒计时的Runnable
+        backgroundTimeoutRunnable = createBackgroundCountdownRunnable()
+        
+        // 如果debug模式，每秒执行一次以显示倒计时，否则直接延迟到超时时间
+        val delayTime = if (debug) 1000L else backgroundTimeout
+        backgroundTimeoutHandler?.postDelayed(backgroundTimeoutRunnable!!, delayTime)
+    }
+    
+    private fun createBackgroundCountdownRunnable(): Runnable {
+        return object : Runnable {
+            override fun run() {
+                val currentTime = System.currentTimeMillis()
+                val elapsedTime = currentTime - backgroundStartTime
+                val remainingTime = backgroundTimeout - elapsedTime
+                
+                if (remainingTime <= 0) {
+                    // 超时，执行锁定逻辑
+                    handleBackgroundTimeout()
+                } else if (debug) {
+                    // debug模式下打印倒计时
+                    val remainingSeconds = (remainingTime / 1000).toInt()
+                    Log.d(TAG, "后台倒计时: ${remainingSeconds}秒")
+                    
+                    // 继续倒计时，每秒执行一次
+                    backgroundTimeoutHandler?.postDelayed(this, 1000L)
+                } else {
+                    // 非debug模式，直接延迟到剩余时间后执行
+                    backgroundTimeoutHandler?.postDelayed(this, remainingTime)
+                }
+            }
         }
-        backgroundTimeoutHandler?.postDelayed(backgroundTimeoutRunnable!!, backgroundTimeout)
     }
 
     private fun handleBackgroundTimeout() {
@@ -440,12 +474,40 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             Log.d(TAG, "开始触摸超时检测，超时时间: ${touchTimeout}ms")
         }
 
+        touchStartTime = System.currentTimeMillis()
         touchTimeoutHandler = Handler(Looper.getMainLooper())
-        touchTimeoutRunnable = Runnable {
-            handleTouchTimeout()
-        }
         
-        touchTimeoutHandler?.postDelayed(touchTimeoutRunnable!!, touchTimeout)
+        // 创建支持倒计时的Runnable
+        touchTimeoutRunnable = createTouchCountdownRunnable()
+        
+        // 如果debug模式，每秒执行一次以显示倒计时，否则直接延迟到超时时间
+        val delayTime = if (debug) 1000L else touchTimeout
+        touchTimeoutHandler?.postDelayed(touchTimeoutRunnable!!, delayTime)
+    }
+    
+    private fun createTouchCountdownRunnable(): Runnable {
+        return object : Runnable {
+            override fun run() {
+                val currentTime = System.currentTimeMillis()
+                val elapsedTime = currentTime - touchStartTime
+                val remainingTime = touchTimeout - elapsedTime
+                
+                if (remainingTime <= 0) {
+                    // 超时，执行锁定逻辑
+                    handleTouchTimeout()
+                } else if (debug) {
+                    // debug模式下打印倒计时
+                    val remainingSeconds = (remainingTime / 1000).toInt()
+                    Log.d(TAG, "触摸倒计时: ${remainingSeconds}秒")
+                    
+                    // 继续倒计时，每秒执行一次
+                    touchTimeoutHandler?.postDelayed(this, 1000L)
+                } else {
+                    // 非debug模式，直接延迟到剩余时间后执行
+                    touchTimeoutHandler?.postDelayed(this, remainingTime)
+                }
+            }
+        }
     }
 
     private fun handleTouchTimeout() {
@@ -658,8 +720,9 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             isInBackground = true
             backgroundTimestamp = System.currentTimeMillis()
             
-            // 移除触摸监听器
+            // 移除触摸监听器和停止触摸倒计时
             removeTouchListener()
+            stopTouchTimeout()
             
             invokeMethod("onEnterBackground", null)
             

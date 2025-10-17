@@ -32,6 +32,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     private var touchGestureRecognizer: UITapGestureRecognizer?
     // 平移手势识别器
     private var panGestureRecognizer: UIPanGestureRecognizer?
+    
+    // 倒计时相关
+    private var touchStartTime: Date?
 
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(
@@ -445,9 +448,39 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             print("AppSecurityLock: Starting touch timer with \(touchTimeout) seconds")
         }
 
-        touchTimer = Timer.scheduledTimer(withTimeInterval: touchTimeout, repeats: false) {
-            [weak self] _ in
-            self?.handleTouchTimeout()
+        touchStartTime = Date()
+        
+        if isDebugMode {
+            // Debug模式：每秒执行一次以显示倒计时
+            touchTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+                self?.handleTouchTimerTick(timer)
+            }
+        } else {
+            // 非Debug模式：直接设置超时时间
+            touchTimer = Timer.scheduledTimer(withTimeInterval: touchTimeout, repeats: false) {
+                [weak self] _ in
+                self?.handleTouchTimeout()
+            }
+        }
+    }
+    
+    private func handleTouchTimerTick(_ timer: Timer) {
+        guard let startTime = touchStartTime else {
+            timer.invalidate()
+            return
+        }
+        
+        let elapsedTime = Date().timeIntervalSince(startTime)
+        let remainingTime = touchTimeout - elapsedTime
+        
+        if remainingTime <= 0 {
+            // 超时，执行锁定逻辑
+            timer.invalidate()
+            handleTouchTimeout()
+        } else {
+            // 打印倒计时
+            let remainingSeconds = Int(ceil(remainingTime))
+            print("AppSecurityLock: 触摸倒计时: \(remainingSeconds)秒")
         }
     }
 
