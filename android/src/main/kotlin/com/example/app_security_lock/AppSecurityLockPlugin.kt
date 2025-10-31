@@ -13,6 +13,7 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebView
 import androidx.annotation.NonNull
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -70,6 +71,8 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     // 触摸监听相关
     private var touchListener: View.OnTouchListener? = null
     private var isTouchListenerSetup = false
+    private var lastTouchTime: Long = 0L
+    private var originalCallback: android.view.Window.Callback? = null
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, CHANNEL_NAME)
@@ -561,30 +564,39 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         activity?.let { act ->
             if (!isTouchListenerSetup && isTouchTimeoutEnabled && !isLocked) {
                 try {
-                    // 创建触摸监听器
-                    touchListener = View.OnTouchListener { _, event ->
-                        when (event.action) {
-                            MotionEvent.ACTION_DOWN,
-                            MotionEvent.ACTION_MOVE,
-                            MotionEvent.ACTION_UP -> {
-                                onUserInteraction()
-                            }
-                        }
-                        false // 不消费事件，让其他组件继续处理
+                    // 使用Window.Callback拦截所有触摸事件（包括Platform View）
+                    val window = act.window
+                    if (originalCallback == null) {
+                        originalCallback = window.callback
                     }
-
-                    // 获取根视图并设置触摸监听器
-                    val rootView = act.findViewById<View>(android.R.id.content)
-                    rootView?.let { root ->
-                        if (root is ViewGroup) {
-                            setTouchListenerRecursively(root)
-                        } else {
-                            root.setOnTouchListener(touchListener)
+                    
+                    window.callback = object : android.view.Window.Callback by originalCallback!! {
+                        override fun dispatchTouchEvent(event: MotionEvent?): Boolean {
+                            event?.let { ev ->
+                                when (ev.action) {
+                                    MotionEvent.ACTION_DOWN,
+                                    MotionEvent.ACTION_MOVE,
+                                    MotionEvent.ACTION_UP -> {
+                                        val currentTime = System.currentTimeMillis()
+                                        // 防止重复触发，至少间隔50ms
+                                        if (currentTime - lastTouchTime > 50) {
+                                            lastTouchTime = currentTime
+                                            onUserInteraction()
+                                            if (debug) {
+                                                Log.d(TAG, "Window触摸事件检测: ${ev.action}")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            // 继续传递事件给原始callback
+                            return originalCallback?.dispatchTouchEvent(event) ?: false
                         }
-                        isTouchListenerSetup = true
-                        if (debug) {
-                            Log.d(TAG, "触摸监听器已设置")
-                        }
+                    }
+                    
+                    isTouchListenerSetup = true
+                    if (debug) {
+                        Log.d(TAG, "Window触摸拦截器已设置（可捕获Platform View事件）")
                     }
                 } catch (e: Exception) {
                     if (debug) {
@@ -595,34 +607,19 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         }
     }
 
-    // 递归设置触摸监听器
-    private fun setTouchListenerRecursively(viewGroup: ViewGroup) {
-        for (i in 0 until viewGroup.childCount) {
-            val child = viewGroup.getChildAt(i)
-            if (child is ViewGroup) {
-                setTouchListenerRecursively(child)
-            }
-            child.setOnTouchListener(touchListener)
-        }
-    }
-
     // 移除触摸监听器
     private fun removeTouchListener() {
         if (isTouchListenerSetup) {
             activity?.let { act ->
                 try {
-                    val rootView = act.findViewById<View>(android.R.id.content)
-                    rootView?.let { root ->
-                        if (root is ViewGroup) {
-                            removeTouchListenerRecursively(root)
-                        } else {
-                            root.setOnTouchListener(null)
-                        }
+                    // 恢复原始的Window.Callback
+                    if (originalCallback != null) {
+                        act.window.callback = originalCallback
                     }
                     isTouchListenerSetup = false
                     touchListener = null
                     if (debug) {
-                        Log.d(TAG, "触摸监听器已移除")
+                        Log.d(TAG, "Window触摸拦截器已移除")
                     }
                 } catch (e: Exception) {
                     if (debug) {
@@ -630,17 +627,6 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     }
                 }
             }
-        }
-    }
-
-    // 递归移除触摸监听器
-    private fun removeTouchListenerRecursively(viewGroup: ViewGroup) {
-        for (i in 0 until viewGroup.childCount) {
-            val child = viewGroup.getChildAt(i)
-            if (child is ViewGroup) {
-                removeTouchListenerRecursively(child)
-            }
-            child.setOnTouchListener(null)
         }
     }
 
