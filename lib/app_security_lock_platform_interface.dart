@@ -2,8 +2,29 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'app_security_lock_method_channel.dart';
 
+/// 锁定原因
+enum LockReason {
+  /// 设备屏幕锁定
+  screenLock,
+
+  /// 后台超时
+  backgroundTimeout,
+
+  /// 触摸超时（无操作超时）
+  touchTimeout,
+
+  /// 未知原因
+  unknown,
+}
+
+/// 锁定回调类型，包含锁定原因
+typedef LockCallback = void Function(LockReason reason);
+
+@Deprecated('使用 VoidCallback 代替')
 typedef AppLifecycleCallback = void Function();
+@Deprecated('使用 LockCallback 代替')
 typedef AppLockedCallback = void Function();
+@Deprecated('使用 VoidCallback 代替')
 typedef AppUnlockedCallback = void Function();
 
 abstract class AppSecurityLockPlatform extends PlatformInterface {
@@ -50,8 +71,8 @@ abstract class AppSecurityLockPlatform extends PlatformInterface {
         'setOnEnterBackgroundCallback() has not been implemented.');
   }
 
-  ///锁定回调
-  void setOnAppLockedCallback(AppLockedCallback? callback) {
+  ///锁定回调（包含锁定原因）
+  void setOnAppLockedCallback(LockCallback? callback) {
     throw UnimplementedError(
         'setOnAppLockedCallback() has not been implemented.');
   }

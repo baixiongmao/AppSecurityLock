@@ -333,7 +333,7 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                                 isLocked = true
                                 stopAllTimers()
                                 removeTouchListener()
-                                invokeMethod("onAppLocked", null)
+                                invokeMethod("onAppLocked", mapOf("reason" to "screenLock"))
                             }
                         }
                         Intent.ACTION_SCREEN_ON -> {
@@ -451,7 +451,7 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         isLocked = true
         stopAllTimers()
         removeTouchListener()
-        invokeMethod("onAppLocked", null)
+        invokeMethod("onAppLocked", mapOf("reason" to "backgroundTimeout"))
     }
 
     private fun stopBackgroundTimeoutTimer() {
@@ -520,7 +520,7 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         isLocked = true
         stopAllTimers()
         removeTouchListener()
-        invokeMethod("onAppLocked", null)
+        invokeMethod("onAppLocked", mapOf("reason" to "touchTimeout"))
     }
     
     private fun stopTouchTimeout() {

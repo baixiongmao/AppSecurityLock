@@ -9,14 +9,32 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
   @visibleForTesting
   final methodChannel = const MethodChannel('app_security_lock');
 
-  AppLifecycleCallback? _onEnterForegroundCallback;
-  AppLifecycleCallback? _onEnterBackgroundCallback;
-  AppLockedCallback? _onAppLockedCallback;
-  AppUnlockedCallback? _onAppUnlockedCallback;
+  VoidCallback? _onEnterForegroundCallback;
+  VoidCallback? _onEnterBackgroundCallback;
+  LockCallback? _onAppLockedCallback;
+  VoidCallback? _onAppUnlockedCallback;
 
   MethodChannelAppSecurityLock() {
     // 设置方法调用处理器来接收来自原生端的回调
     methodChannel.setMethodCallHandler(_handleMethodCall);
+  }
+
+  /// 解析锁定原因
+  LockReason _parseLockReason(dynamic arguments) {
+    if (arguments is Map) {
+      final reason = arguments['reason'] as String?;
+      switch (reason) {
+        case 'screenLock':
+          return LockReason.screenLock;
+        case 'backgroundTimeout':
+          return LockReason.backgroundTimeout;
+        case 'touchTimeout':
+          return LockReason.touchTimeout;
+        default:
+          return LockReason.unknown;
+      }
+    }
+    return LockReason.unknown;
   }
 
   Future<dynamic> _handleMethodCall(MethodCall call) async {
@@ -28,7 +46,8 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
         _onEnterBackgroundCallback?.call();
         break;
       case 'onAppLocked':
-        _onAppLockedCallback?.call();
+        final reason = _parseLockReason(call.arguments);
+        _onAppLockedCallback?.call(reason);
         break;
       case 'onAppUnlocked':
         _onAppUnlockedCallback?.call();
@@ -77,25 +96,25 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
 
   /// 设置应用进入前台的回调
   @override
-  void setOnEnterForegroundCallback(AppLifecycleCallback? callback) {
+  void setOnEnterForegroundCallback(VoidCallback? callback) {
     _onEnterForegroundCallback = callback;
   }
 
   /// 设置应用进入后台的回调
   @override
-  void setOnEnterBackgroundCallback(AppLifecycleCallback? callback) {
+  void setOnEnterBackgroundCallback(VoidCallback? callback) {
     _onEnterBackgroundCallback = callback;
   }
 
-  ///锁定回调
+  ///锁定回调（包含锁定原因）
   @override
-  void setOnAppLockedCallback(AppLockedCallback? callback) {
+  void setOnAppLockedCallback(LockCallback? callback) {
     _onAppLockedCallback = callback;
   }
 
   // 通知前台解锁
   @override
-  void setOnAppUnlockedCallback(AppUnlockedCallback? callback) {
+  void setOnAppUnlockedCallback(VoidCallback? callback) {
     _onAppUnlockedCallback = callback;
   }
 

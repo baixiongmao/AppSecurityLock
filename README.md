@@ -1,11 +1,14 @@
 # App Security Lock
 
-A comprehensive Flutter plugin for implementing app security features including screen lock detection, background timeout, and lifecycle monitoring.
+A comprehensive Flutter plugin for implementing app security features including screen lock detection, background timeout, touch timeout and lifecycle monitoring. **Supports chain calls and lock reason callbacks.**
 
 ## Features
 
 - **Screen Lock Detection**: Automatically locks the app when the device screen is turned off
 - **Background Timeout**: Locks the app after a specified time in the background
+- **Touch Timeout**: Locks the app after a period of user inactivity
+- **Lock Reason Callback**: Know exactly why the app was locked (screen lock, background timeout, or touch timeout)
+- **Chain Calls**: Fluent API design for cleaner code
 - **Lifecycle Monitoring**: Tracks app foreground/background state changes
 - **Cross-platform**: Supports both iOS and Android
 - **Customizable**: Flexible configuration options for different security needs
@@ -23,7 +26,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  app_security_lock: ^0.0.1
+  app_security_lock: ^0.2.0
 ```
 
 Then run:
@@ -34,111 +37,105 @@ flutter pub get
 
 ## Usage
 
-### Basic Setup
+### Basic Setup (Recommended - Chain Calls)
 
 ```dart
 import 'package:app_security_lock/app_security_lock.dart';
 
-class MyApp extends StatefulWidget {
-  @override
-  _MyAppState createState() => _MyAppState();
-}
-
 class _MyAppState extends State<MyApp> {
-  final AppSecurityLock _appSecurityLock = AppSecurityLock();
+  late final AppSecurityLock _lock;
 
   @override
   void initState() {
     super.initState();
-    _initializeSecurityLock();
-  }
+    
+    // Use chain calls to set up all callbacks
+    _lock = AppSecurityLock()
+      ..onLock((reason) {
+        print('App locked, reason: ${reason.name}');
+        // reason: screenLock / backgroundTimeout / touchTimeout / unknown
+        _showAuthenticationScreen();
+      })
+      ..onUnlock(() => print('Please unlock the app'))
+      ..onForeground(() => print('App entered foreground'))
+      ..onBackground(() => print('App entered background'));
 
-  void _initializeSecurityLock() async {
-    // Initialize the plugin with security settings
-    await _appSecurityLock.init(
+    // Initialize the plugin
+    _lock.init(
       isScreenLockEnabled: true,
       isBackgroundLockEnabled: true,
-      backgroundTimeout: 30.0, // 30 seconds
+      backgroundTimeout: 30.0,
+      isTouchTimeoutEnabled: false,
+      touchTimeout: 60.0,
+      debug: true, // Enable debug logs in native console
     );
-
-    // Set up lifecycle callbacks
-    _appSecurityLock.setOnEnterForegroundCallback(() {
-      print('App entered foreground');
-    });
-
-    _appSecurityLock.setOnEnterBackgroundCallback(() {
-      print('App entered background');
-    });
-
-    _appSecurityLock.setOnAppLockedCallback(() {
-      print('App is locked - show authentication screen');
-      _showAuthenticationScreen();
-    });
-
-    _appSecurityLock.setOnAppUnlockedCallback(() {
-      print('App is unlocked');
-    });
   }
 
   void _showAuthenticationScreen() {
     // Implement your authentication UI here
-    // For example, navigate to a biometric authentication screen
   }
 }
+```
+
+### Lock Reason
+
+The `onLock` callback now includes a `LockReason` parameter:
+
+```dart
+_lock.onLock((reason) {
+  switch (reason) {
+    case LockReason.screenLock:
+      print('Locked due to device screen lock');
+      break;
+    case LockReason.backgroundTimeout:
+      print('Locked due to background timeout');
+      break;
+    case LockReason.touchTimeout:
+      print('Locked due to inactivity timeout');
+      break;
+    case LockReason.unknown:
+      print('Locked for unknown reason');
+      break;
+  }
+});
 ```
 
 ### Configuration Options
 
 ```dart
 // Initialize with all options
-await _appSecurityLock.init(
-  isScreenLockEnabled: true,    // Lock app when screen turns off
-  isBackgroundLockEnabled: true, // Lock app after background timeout
-  backgroundTimeout: 60.0,      // Background timeout in seconds
+await _lock.init(
+  isScreenLockEnabled: true,      // Lock app when screen turns off
+  isBackgroundLockEnabled: true,  // Lock app after background timeout
+  backgroundTimeout: 60.0,        // Background timeout in seconds
+  isTouchTimeoutEnabled: true,    // Lock app after inactivity
+  touchTimeout: 120.0,            // Inactivity timeout in seconds
+  debug: false,                   // Enable debug logs (native console)
 );
 ```
 
-### Dynamic Configuration
+### Dynamic Configuration (Chain Calls)
 
 ```dart
-// Enable/disable screen lock detection
-_appSecurityLock.setScreenLockEnabled(true);
+// All methods support chain calls
+_lock
+  ..screenLockEnabled(true)
+  ..backgroundLockEnabled(true);
 
-// Enable/disable background lock
-_appSecurityLock.setBackgroundLockEnabled(true);
+// Async methods also support chain calls
+await _lock.backgroundTimeout(45.0);
+await _lock.touchTimeout(90.0);
+await _lock.touchTimeoutEnabled(true);
 
-// Update background timeout (in seconds)
-_appSecurityLock.setBackgroundTimeout(45.0);
+// Lock/Unlock the app
+await _lock.lock();    // Lock the app
+await _lock.unlock();  // Unlock the app
 
-// Manually lock the app
-_appSecurityLock.setLockEnabled(true);
-```
+// Or use setLocked
+await _lock.setLocked(true);
 
-### Lifecycle Callbacks
-
-```dart
-// App enters foreground
-_appSecurityLock.setOnEnterForegroundCallback(() {
-  // Handle foreground event
-});
-
-// App enters background
-_appSecurityLock.setOnEnterBackgroundCallback(() {
-  // Handle background event
-});
-
-// App gets locked
-_appSecurityLock.setOnAppLockedCallback(() {
-  // Show authentication screen
-  Navigator.of(context).push(
-    MaterialPageRoute(builder: (context) => AuthenticationScreen()),
-  );
-});
-
-// App gets unlocked
-_appSecurityLock.setOnAppUnlockedCallback(() {
-  // App is now accessible
-});
+// Reset touch timer (extend inactivity timeout)
+_lock.resetTouchTimer();
 ```
 
 ## Complete Example
@@ -148,68 +145,43 @@ import 'package:flutter/material.dart';
 import 'package:app_security_lock/app_security_lock.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
   @override
-  _MyAppState createState() => _MyAppState();
+  State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
-  final AppSecurityLock _appSecurityLock = AppSecurityLock();
+  late final AppSecurityLock _lock;
   bool _isLocked = false;
-  bool _isScreenLockEnabled = true;
-  bool _isBackgroundLockEnabled = true;
-  double _backgroundTimeout = 30.0;
+  LockReason? _lockReason;
 
   @override
   void initState() {
     super.initState();
-    _setupSecurityLock();
-  }
+    
+    _lock = AppSecurityLock()
+      ..onLock((reason) {
+        setState(() {
+          _isLocked = true;
+          _lockReason = reason;
+        });
+      })
+      ..onUnlock(() {
+        // Prompt for authentication
+      })
+      ..onForeground(() => print('Foreground'))
+      ..onBackground(() => print('Background'));
 
-  void _setupSecurityLock() async {
-    // Initialize with default settings
-    await _appSecurityLock.init(
-      isScreenLockEnabled: _isScreenLockEnabled,
-      isBackgroundLockEnabled: _isBackgroundLockEnabled,
-      backgroundTimeout: _backgroundTimeout,
+    _lock.init(
+      isScreenLockEnabled: true,
+      isBackgroundLockEnabled: true,
+      backgroundTimeout: 30.0,
     );
-
-    // Setup callbacks
-    _appSecurityLock.setOnAppLockedCallback(() {
-      setState(() {
-        _isLocked = true;
-      });
-    });
-
-    _appSecurityLock.setOnAppUnlockedCallback(() {
-      setState(() {
-        _isLocked = false;
-      });
-    });
-  }
-
-  void _toggleScreenLock() {
-    setState(() {
-      _isScreenLockEnabled = !_isScreenLockEnabled;
-    });
-    _appSecurityLock.setScreenLockEnabled(_isScreenLockEnabled);
-  }
-
-  void _toggleBackgroundLock() {
-    setState(() {
-      _isBackgroundLockEnabled = !_isBackgroundLockEnabled;
-    });
-    _appSecurityLock.setBackgroundLockEnabled(_isBackgroundLockEnabled);
-  }
-
-  void _updateTimeout(double value) {
-    setState(() {
-      _backgroundTimeout = value;
-    });
-    _appSecurityLock.setBackgroundTimeout(_backgroundTimeout);
   }
 
   @override
@@ -221,13 +193,18 @@ class _MyAppState extends State<MyApp> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.lock, size: 64, color: Colors.red),
-                Text('App is Locked', style: TextStyle(fontSize: 24)),
+                const Icon(Icons.lock, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                const Text('App is Locked', style: TextStyle(fontSize: 24)),
+                if (_lockReason != null)
+                  Text('Reason: ${_lockReason!.name}'),
+                const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: () {
-                    _appSecurityLock.setLockEnabled(false);
+                  onPressed: () async {
+                    await _lock.unlock();
+                    setState(() => _isLocked = false);
                   },
-                  child: Text('Unlock'),
+                  child: const Text('Unlock'),
                 ),
               ],
             ),
@@ -238,40 +215,12 @@ class _MyAppState extends State<MyApp> {
 
     return MaterialApp(
       home: Scaffold(
-        appBar: AppBar(title: Text('App Security Lock Demo')),
-        body: Padding(
-          padding: EdgeInsets.all(16),
-          children: [
-            SwitchListTile(
-              title: Text('Screen Lock Detection'),
-              subtitle: Text('Lock app when screen turns off'),
-              value: _isScreenLockEnabled,
-              onChanged: (value) => _toggleScreenLock(),
-            ),
-            SwitchListTile(
-              title: Text('Background Lock'),
-              subtitle: Text('Lock app after background timeout'),
-              value: _isBackgroundLockEnabled,
-              onChanged: (value) => _toggleBackgroundLock(),
-            ),
-            ListTile(
-              title: Text('Background Timeout'),
-              subtitle: Slider(
-                value: _backgroundTimeout,
-                min: 5.0,
-                max: 300.0,
-                divisions: 59,
-                label: '${_backgroundTimeout.round()}s',
-                onChanged: _updateTimeout,
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                _appSecurityLock.setLockEnabled(true);
-              },
-              child: Text('Lock App Manually'),
-            ),
-          ],
+        appBar: AppBar(title: const Text('App Security Lock Demo')),
+        body: Center(
+          child: ElevatedButton(
+            onPressed: () => _lock.lock(),
+            child: const Text('Lock App'),
+          ),
         ),
       ),
     );
@@ -281,36 +230,89 @@ class _MyAppState extends State<MyApp> {
 
 ## API Reference
 
-### Methods
+### Initialization
 
-| Method | Description | Parameters |
-|--------|-------------|------------|
-| `init()` | Initialize the plugin | `isScreenLockEnabled`, `isBackgroundLockEnabled`, `backgroundTimeout` |
-| `setLockEnabled()` | Manually lock/unlock the app | `bool enabled` |
-| `setScreenLockEnabled()` | Enable/disable screen lock detection | `bool enabled` |
-| `setBackgroundLockEnabled()` | Enable/disable background lock | `bool enabled` |
-| `setBackgroundTimeout()` | Set background timeout duration | `double timeoutSeconds` |
+| Method | Description |
+|--------|-------------|
+| `init()` | Initialize the plugin with configuration options |
 
-### Callbacks
+### Event Callbacks (Chain Calls Supported)
 
-| Callback | Description |
-|----------|-------------|
-| `setOnEnterForegroundCallback()` | Called when app enters foreground |
-| `setOnEnterBackgroundCallback()` | Called when app enters background |
-| `setOnAppLockedCallback()` | Called when app gets locked |
-| `setOnAppUnlockedCallback()` | Called when app gets unlocked |
+| Method | Description |
+|--------|-------------|
+| `onLock((LockReason reason) => ...)` | Called when app gets locked, includes lock reason |
+| `onUnlock(() => ...)` | Called when app needs to be unlocked |
+| `onForeground(() => ...)` | Called when app enters foreground |
+| `onBackground(() => ...)` | Called when app enters background |
+
+### Lock Reason
+
+| Value | Description |
+|-------|-------------|
+| `LockReason.screenLock` | Device screen was locked |
+| `LockReason.backgroundTimeout` | App was in background too long |
+| `LockReason.touchTimeout` | No user interaction for too long |
+| `LockReason.unknown` | Unknown reason |
+
+### Lock Control (Chain Calls Supported)
+
+| Method | Description |
+|--------|-------------|
+| `lock()` | Lock the app |
+| `unlock()` | Unlock the app |
+| `setLocked(bool)` | Set lock state |
+
+### Screen Lock Settings
+
+| Method | Description |
+|--------|-------------|
+| `screenLockEnabled(bool)` | Enable/disable screen lock detection |
+
+### Background Lock Settings
+
+| Method | Description |
+|--------|-------------|
+| `backgroundLockEnabled(bool)` | Enable/disable background lock |
+| `backgroundTimeout(double)` | Set background timeout (seconds) |
+
+### Touch Timeout Settings
+
+| Method | Description |
+|--------|-------------|
+| `touchTimeoutEnabled(bool)` | Enable/disable touch timeout |
+| `touchTimeout(double)` | Set touch timeout (seconds) |
+| `resetTouchTimer()` | Reset the inactivity timer |
+
+## Migration from v0.1.x
+
+If you're upgrading from v0.1.x, here's how to migrate:
+
+```dart
+// Old API (deprecated but still works)
+_lock.setOnAppLockedCallback(() => print('locked'));
+_lock.setOnEnterForegroundCallback(() => print('foreground'));
+_lock.setBackgroundTimeout(30.0);
+
+// New API (recommended)
+_lock
+  ..onLock((reason) => print('locked: ${reason.name}'))
+  ..onForeground(() => print('foreground'));
+await _lock.backgroundTimeout(30.0);
+```
 
 ## Platform-Specific Behavior
 
 ### iOS
 - Uses `UIApplication` lifecycle notifications
-- Monitors screen brightness changes for lock detection
+- Uses `protectedData` notifications for reliable screen lock detection
 - Supports background timeout with timers
+- Touch detection via gesture recognizers
 
 ### Android
 - Uses `Application.ActivityLifecycleCallbacks`
 - Monitors screen state with broadcast receivers (`ACTION_SCREEN_OFF`, `ACTION_SCREEN_ON`, `ACTION_USER_PRESENT`)
 - Supports background timeout with handlers
+- Touch detection via Window.Callback
 
 ## License
 

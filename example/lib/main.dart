@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:app_security_lock/app_security_lock.dart';
 
@@ -14,7 +13,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  final _appSecurityLockPlugin = AppSecurityLock();
+  late final AppSecurityLock _appSecurityLock;
   // 当前是否锁定
   bool isLocked = false;
   bool isBackgroundLocked = false;
@@ -31,31 +30,31 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
 
-    _appSecurityLockPlugin.setOnAppLockedCallback(() {
-      _addLog('App is locked');
-      setState(() {
-        isLocked = true;
+    // 使用链式调用设置所有回调
+    _appSecurityLock = AppSecurityLock()
+      ..onLock((reason) {
+        _addLog('应用已锁定，原因: ${reason.name}');
+        setState(() => isLocked = true);
+      })
+      ..onUnlock(() {
+        _addLog('请解锁应用');
+        setState(() => isLocked = true);
+      })
+      ..onForeground(() {
+        _addLog('应用进入前台');
+      })
+      ..onBackground(() {
+        _addLog('应用进入后台');
       });
-    });
-    _appSecurityLockPlugin.setOnAppUnlockedCallback(() {
-      _addLog('please unlock the app');
-      setState(() {
-        isLocked = true;
-      });
-    });
-    _appSecurityLockPlugin.setOnEnterForegroundCallback(() {
-      _addLog('App is foregrounded');
-    });
-    _appSecurityLockPlugin.setOnEnterBackgroundCallback(() {
-      _addLog('App is backgrounded');
-    });
-    _appSecurityLockPlugin.init(
+
+    // 初始化插件
+    _appSecurityLock.init(
       isScreenLockEnabled: isScreenLocked,
       isBackgroundLockEnabled: isBackgroundLocked,
       backgroundTimeout: 5.0,
       isTouchTimeoutEnabled: false,
-      touchTimeout: 10.0, // 30 seconds of inactivity
-      debug: kDebugMode,
+      touchTimeout: 10.0,
+      debug: true,
     );
   }
 
@@ -85,11 +84,9 @@ class _MyAppState extends State<MyApp> {
                         ),
                         Switch(
                           value: isLocked,
-                          onChanged: (value) {
-                            setState(() {
-                              isLocked = value;
-                              _appSecurityLockPlugin.setLockEnabled(value);
-                            });
+                          onChanged: (value) async {
+                            setState(() => isLocked = value);
+                            await _appSecurityLock.setLocked(value);
                           },
                         ),
                       ],
@@ -114,14 +111,14 @@ class _MyAppState extends State<MyApp> {
                           children: [
                             Expanded(
                                 child: ElevatedButton(
-                                    onPressed: () => _appSecurityLockPlugin
-                                        .restartTouchTimer(),
+                                    onPressed: () =>
+                                        _appSecurityLock.resetTouchTimer(),
                                     child: const Text('restart'))),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () {
-                                  _appSecurityLockPlugin
-                                      .setTouchTimeoutEnabled(true);
+                                onPressed: () async {
+                                  await _appSecurityLock
+                                      .touchTimeoutEnabled(true);
                                   _addLog('Touch timeout enabled');
                                 },
                                 child: const Text('Enable Touch Timeout'),
@@ -130,9 +127,9 @@ class _MyAppState extends State<MyApp> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () {
-                                  _appSecurityLockPlugin
-                                      .setTouchTimeoutEnabled(false);
+                                onPressed: () async {
+                                  await _appSecurityLock
+                                      .touchTimeoutEnabled(false);
                                   _addLog('Touch timeout disabled');
                                 },
                                 child: const Text('Disable Touch Timeout'),
@@ -145,8 +142,8 @@ class _MyAppState extends State<MyApp> {
                           children: [
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () {
-                                  _appSecurityLockPlugin.setTouchTimeout(10.0);
+                                onPressed: () async {
+                                  await _appSecurityLock.touchTimeout(10.0);
                                   _addLog('Touch timeout set to 10 seconds');
                                 },
                                 child: const Text('10s Timeout'),
@@ -155,8 +152,8 @@ class _MyAppState extends State<MyApp> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () {
-                                  _appSecurityLockPlugin.setTouchTimeout(30.0);
+                                onPressed: () async {
+                                  await _appSecurityLock.touchTimeout(30.0);
                                   _addLog('Touch timeout set to 30 seconds');
                                 },
                                 child: const Text('30s Timeout'),
@@ -188,11 +185,8 @@ class _MyAppState extends State<MyApp> {
                             Switch(
                                 value: isBackgroundLocked,
                                 onChanged: (value) {
-                                  setState(() {
-                                    isBackgroundLocked = value;
-                                  });
-                                  _appSecurityLockPlugin
-                                      .setBackgroundLockEnabled(value);
+                                  setState(() => isBackgroundLocked = value);
+                                  _appSecurityLock.backgroundLockEnabled(value);
                                 }),
                           ],
                         ),
@@ -201,25 +195,22 @@ class _MyAppState extends State<MyApp> {
                           children: [
                             ElevatedButton(
                               onPressed: () {
-                                _appSecurityLockPlugin
-                                    .setBackgroundLockEnabled(false);
-                                _addLog('Background timer restarted');
+                                _appSecurityLock.backgroundLockEnabled(false);
+                                _addLog('Background lock disabled');
                               },
-                              child: const Text('30s Timer'),
+                              child: const Text('Disable'),
                             ),
                             ElevatedButton(
-                              onPressed: () {
-                                _appSecurityLockPlugin
-                                    .setBackgroundTimeout(60.0);
-                                _addLog('Background timer restarted');
+                              onPressed: () async {
+                                await _appSecurityLock.backgroundTimeout(60.0);
+                                _addLog('Background timeout set to 60s');
                               },
                               child: const Text('60s Timer'),
                             ),
                             ElevatedButton(
-                              onPressed: () {
-                                _appSecurityLockPlugin
-                                    .setBackgroundTimeout(30.0);
-                                _addLog('Background timer restarted');
+                              onPressed: () async {
+                                await _appSecurityLock.backgroundTimeout(30.0);
+                                _addLog('Background timeout set to 30s');
                               },
                               child: const Text('30s Timer'),
                             ),
@@ -249,11 +240,8 @@ class _MyAppState extends State<MyApp> {
                             Switch(
                                 value: isScreenLocked,
                                 onChanged: (value) {
-                                  setState(() {
-                                    isScreenLocked = value;
-                                  });
-                                  _appSecurityLockPlugin
-                                      .setScreenLockEnabled(value);
+                                  setState(() => isScreenLocked = value);
+                                  _appSecurityLock.screenLockEnabled(value);
                                 }),
                           ],
                         ),

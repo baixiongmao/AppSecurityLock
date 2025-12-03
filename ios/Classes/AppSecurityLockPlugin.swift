@@ -256,7 +256,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             isLocked = true
             stopAllTimers()
             removeTouchEventListeners()
-            lifecycleChannel?.invokeMethod("onAppLocked", arguments: nil)
+            lifecycleChannel?.invokeMethod("onAppLocked", arguments: ["reason": "screenLock"])
         }
     }
 
@@ -312,7 +312,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             print("AppSecurityLock: App is locked due to background timeout")
         }
         // 触发锁定回调
-        self.lifecycleChannel?.invokeMethod("onAppLocked", arguments: nil)
+        self.lifecycleChannel?.invokeMethod("onAppLocked", arguments: ["reason": "backgroundTimeout"])
         // 停止后台超时定时器
         self.stopAllTimers()
     }
@@ -534,7 +534,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             }
 
             // 触发锁定回调
-            self.lifecycleChannel?.invokeMethod("onAppLocked", arguments: nil)
+            self.lifecycleChannel?.invokeMethod("onAppLocked", arguments: ["reason": "touchTimeout"])
 
             // 停止所有定时器
             self.stopAllTimers()

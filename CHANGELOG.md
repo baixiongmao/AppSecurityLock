@@ -1,3 +1,60 @@
+## 0.2.0
+
+### 🎉 API 重构 & 链式调用支持
+
+本版本对 API 进行了全面重构，提供更简洁、更直观的使用方式。
+
+### ✨ 新特性
+
+- **链式调用支持**: 所有方法现在支持链式调用，代码更简洁
+- **锁定原因回调**: `onLock` 回调现在包含 `LockReason` 参数，可以知道是什么导致了锁定
+- **新增 LockReason 枚举**: 
+  - `LockReason.screenLock` - 设备屏幕锁定
+  - `LockReason.backgroundTimeout` - 后台超时
+  - `LockReason.touchTimeout` - 触摸超时（无操作超时）
+  - `LockReason.unknown` - 未知原因
+
+### 🔄 API 变更
+
+| 旧 API | 新 API | 说明 |
+|---------|---------|------|
+| `setOnAppLockedCallback(callback)` | `onLock((reason) => ...)` | 支持链式调用，包含锁定原因 |
+| `setOnAppUnlockedCallback(callback)` | `onUnlock(callback)` | 支持链式调用 |
+| `setOnEnterForegroundCallback(callback)` | `onForeground(callback)` | 支持链式调用 |
+| `setOnEnterBackgroundCallback(callback)` | `onBackground(callback)` | 支持链式调用 |
+| `setLockEnabled(enabled)` | `setLocked(enabled)` / `lock()` / `unlock()` | 更语义化 |
+| `setScreenLockEnabled(enabled)` | `screenLockEnabled(enabled)` | 支持链式调用 |
+| `setBackgroundLockEnabled(enabled)` | `backgroundLockEnabled(enabled)` | 支持链式调用 |
+| `setBackgroundTimeout(seconds)` | `backgroundTimeout(seconds)` | 支持链式调用 |
+| `setTouchTimeoutEnabled(enabled)` | `touchTimeoutEnabled(enabled)` | 支持链式调用 |
+| `setTouchTimeout(seconds)` | `touchTimeout(seconds)` | 支持链式调用 |
+| `restartTouchTimer()` | `resetTouchTimer()` | 更语义化 |
+
+### 📝 使用示例
+
+```dart
+// 新的链式调用方式
+final lock = AppSecurityLock()
+  ..onLock((reason) {
+    print('应用已锁定，原因: ${reason.name}');
+    // reason: screenLock / backgroundTimeout / touchTimeout / unknown
+  })
+  ..onUnlock(() => print('请解锁应用'))
+  ..onForeground(() => print('进入前台'))
+  ..onBackground(() => print('进入后台'));
+
+await lock.init(
+  isScreenLockEnabled: true,
+  isBackgroundLockEnabled: true,
+  backgroundTimeout: 30.0,
+);
+```
+
+### ⚙️ 向后兼容
+
+- 旧 API 仍然可用，但已标记为 `@Deprecated`
+- 建议尽快迁移到新 API
+
 ## 0.1.1
 添加安卓web_view 触摸检测支持
 ## 0.1.0
