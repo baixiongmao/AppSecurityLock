@@ -333,6 +333,39 @@ await _lock.screenRecordingProtectionEnabled(
 await _lock.screenRecordingProtectionEnabled(false);
 ```
 
+### Disable screen recording on the specified page
+```dart
+class AppPage extends StatefulWidget {
+  const AppPage({super.key});
+
+  @override
+  State<AppPage> createState() => _AppPageState();
+}
+
+class _AppPageState extends State<AppPage> {
+  @override
+  void initState() {
+    super.initState();
+    AppSecurityLock().screenRecordingProtectionEnabled(
+      true,
+      warningMessage: "test",
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container();
+  }
+
+  @override
+  void dispose() {
+    AppSecurityLock().screenRecordingProtectionEnabled(false);
+    super.dispose();
+  }
+}
+
+```
+
 ### Chain Call Usage
 
 ```dart
