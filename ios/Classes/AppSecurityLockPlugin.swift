@@ -2,6 +2,7 @@ import Flutter
 import Foundation
 import LocalAuthentication
 import UIKit
+import AVFoundation
 
 public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     private var lifecycleChannel: FlutterMethodChannel?
@@ -35,6 +36,12 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     
     // 倒计时相关
     private var touchStartTime: Date?
+    
+    // 录屏防护相关
+    private var isScreenRecordingProtectionEnabled = false
+    private var screenProtectionView: UIView?
+    private var securityOverlay: SecurityOverlayView?
+    private var screenRecordingWarningMessage: String = "屏幕正在被录制"
 
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(
@@ -72,6 +79,10 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                     isDebugMode = debug
                 }
             }
+            
+            // 立即打印 debug 模式状态（用于调试）
+            print("AppSecurityLock: Debug mode is \(isDebugMode ? "ENABLED" : "DISABLED")")
+            
             // 只在首次调用时启动监听
             if !isListening {
                 startListen()
@@ -85,7 +96,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
 
             if isDebugMode {
                 print(
-                    "Flutter: 初始化参数 \n  isScreenLockEnabled: \(isScreenLockEnabled),\n  isBackgroundLockEnabled: \(isBackgroundLockEnabled),\n  backgroundTimeout: \(backgroundTimeout),\n  isTouchTimeoutEnabled: \(isTouchTimeoutEnabled),\n  touchTimeout: \(touchTimeout)"
+                    "Flutter: 初始化参数 \n  isScreenLockEnabled: \(isScreenLockEnabled),\n  isBackgroundLockEnabled: \(isBackgroundLockEnabled),\n  backgroundTimeout: \(backgroundTimeout),\n  isTouchTimeoutEnabled: \(isTouchTimeoutEnabled),\n  touchTimeout: \(touchTimeout),\n  debug: \(isDebugMode)"
                 )
             }
 
@@ -95,9 +106,33 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             if let args = call.arguments as? [String: Any],
                 let enabled = args["enabled"] as? Bool
             {
+                let wasLocked = isLocked
                 isLocked = enabled
                 if isDebugMode {
                     print("Flutter: 设置锁定状态为 \(isLocked)")
+                }
+                
+                // 如果从解锁状态变为锁定状态，触发手动锁定回调
+                if !wasLocked && enabled {
+                    if isDebugMode {
+                        print("Flutter: 应用已手动锁定，触发锁定回调")
+                    }
+                    stopAllTimers()
+                    removeTouchEventListeners()
+                    lifecycleChannel?.invokeMethod("onAppLocked", arguments: ["reason": "manual"])
+                }
+                // 如果从锁定状态变为解锁状态，触发解锁回调
+                else if wasLocked && !enabled {
+                    if isDebugMode {
+                        print("Flutter: 应用已解锁，触发解锁回调")
+                    }
+                    lifecycleChannel?.invokeMethod("onAppUnlocked", arguments: nil)
+                    
+                    // 解锁后重新启动触摸超时功能（如果启用）
+                    if isTouchTimeoutEnabled {
+                        setupTouchEventListeners()
+                        startTouchTimer()
+                    }
                 }
                 
                 result(nil)
@@ -174,6 +209,19 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         case "restartTouchTimer":
             restartTouchTimerFromButton()
             result(nil)
+        case "setScreenRecordingProtectionEnabled":
+            if let args = call.arguments as? [String: Any],
+                let enabled = args["enabled"] as? Bool
+            {
+                let warningMessage = args["warningMessage"] as? String
+                setScreenRecordingProtectionEnabled(enabled, warningMessage: warningMessage)
+                result(nil)
+            } else {
+                result(
+                    FlutterError(
+                        code: "INVALID_ARGUMENT", message: "Missing enabled parameter", details: nil
+                    ))
+            }
         case "getPlatformVersion":
             result("iOS " + UIDevice.current.systemVersion)
         default:
@@ -216,20 +264,25 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             name: UIApplication.protectedDataDidBecomeAvailableNotification,
             object: nil
         )
+        
+        if isDebugMode {
+            print("AppSecurityLock: 屏幕锁定监听器已注册")
+        }
 
         // 触摸事件监听将在 init 方法中根据配置决定是否启动
     }
 
     @objc private func onEnterForeground() {
-        print("App 进入前台")
+        if isDebugMode {
+            print("App 进入前台")
+        }
         // 停止亮度检测，因为应用已进入前台
         stopAllTimers()
         // 启动触摸定时器
         lifecycleChannel?.invokeMethod("onEnterForeground", arguments: nil)
-        if isLocked {
-            // 通知前台解锁
-            lifecycleChannel?.invokeMethod("onAppUnlocked", arguments: nil)
-        }
+        
+        // 注意：不再在进入前台时自动触发解锁回调
+        // 应用解锁应该由用户通过 UI 操作手动触发（调用 setLocked(false)）
         
         // 重新启动触摸超时功能（如果启用的话）
         if isTouchTimeoutEnabled && !isLocked {
@@ -239,7 +292,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     }
 
     @objc private func onEnterBackground() {
-        print("App 进入后台")
+        if isDebugMode {
+            print("App 进入后台")
+        }
         lifecycleChannel?.invokeMethod("onEnterBackground", arguments: nil)
         
         // 开始后台超时任务
@@ -248,21 +303,35 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
 
     // 屏幕锁定回调
     @objc func screenLocked() {
-        print("AppSecurityLock: 屏幕锁定检测到")
+        if isDebugMode {
+            print("AppSecurityLock: 屏幕锁定检测到 - isScreenLockEnabled: \(isScreenLockEnabled), isLocked: \(isLocked)")
+        }
         
         // 只有在启用屏幕锁定功能且应用未锁定时才执行锁定
         if isScreenLockEnabled && !isLocked {
-            print("AppSecurityLock: 执行应用锁定")
+            if isDebugMode {
+                print("AppSecurityLock: 执行应用锁定")
+            }
             isLocked = true
             stopAllTimers()
             removeTouchEventListeners()
             lifecycleChannel?.invokeMethod("onAppLocked", arguments: ["reason": "screenLock"])
+        } else {
+            if isDebugMode {
+                if !isScreenLockEnabled {
+                    print("AppSecurityLock: 屏幕锁定功能未启用，跳过锁定")
+                } else if isLocked {
+                    print("AppSecurityLock: 应用已锁定，跳过重复锁定")
+                }
+            }
         }
     }
 
     // 屏幕解锁回调
     @objc func screenUnlocked() {
-        print("AppSecurityLock: 屏幕解锁检测到")
+        if isDebugMode {
+            print("AppSecurityLock: 屏幕解锁检测到")
+        }
         // 注意：这里不自动解锁应用，需要用户手动解锁
         // 应用解锁由用户通过UI操作控制
     }
@@ -477,7 +546,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             // 超时，执行锁定逻辑
             timer.invalidate()
             handleTouchTimeout()
-        } else {
+        } else if isDebugMode {
             // 打印倒计时
             let remainingSeconds = Int(ceil(remainingTime))
             print("AppSecurityLock: 触摸倒计时: \(remainingSeconds)秒")
@@ -550,5 +619,215 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             NotificationCenter.default.removeObserver(self)
             isListening = false
         }
+        // 禁用录屏防护
+        setScreenRecordingProtectionEnabled(false)
+    }
+
+    // MARK: - 录屏防护方法
+    
+    /// 设置录屏防护
+    private func setScreenRecordingProtectionEnabled(_ enabled: Bool, warningMessage: String? = nil) {
+        isScreenRecordingProtectionEnabled = enabled
+        
+        // 更新警告文本
+        if let message = warningMessage {
+            screenRecordingWarningMessage = message
+        }
+        
+        if enabled {
+            if isDebugMode {
+                print("AppSecurityLock: Setting up screen recording protection")
+            }
+            setupScreenRecordingProtection()
+        } else {
+            if isDebugMode {
+                print("AppSecurityLock: Removing screen recording protection")
+            }
+            removeScreenRecordingProtection()
+        }
+    }
+    
+    /// 设置屏幕录制监听
+    private func setupScreenRecordingProtection() {
+        // 录屏状态变化通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleScreenRecordingChange),
+            name: UIScreen.capturedDidChangeNotification,
+            object: nil
+        )
+        
+        // 应用回到前台时检查
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(checkScreenRecording),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+        
+        // 立即检查当前状态
+        checkScreenRecording()
+        
+        if isDebugMode {
+            print("AppSecurityLock: Screen recording protection setup completed")
+        }
+    }
+    
+    /// 移除屏幕录制保护
+    private func removeScreenRecordingProtection() {
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIScreen.capturedDidChangeNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+        
+        hideSecurityOverlay()
+        
+        if isDebugMode {
+            print("AppSecurityLock: Screen recording protection removed")
+        }
+    }
+    
+    /// 处理屏幕录制状态变化
+    @objc private func handleScreenRecordingChange() {
+        checkScreenRecording()
+    }
+    
+    /// 检查屏幕录制状态
+    @objc private func checkScreenRecording() {
+        if isScreenRecordingProtectionEnabled {
+            if UIScreen.main.isCaptured {
+                showSecurityOverlay()
+            } else {
+                hideSecurityOverlay()
+            }
+        }
+    }
+    
+    /// 显示安全覆盖视图
+    private func showSecurityOverlay() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let window = windowScene.windows.first else { return }
+            
+            if self.securityOverlay == nil {
+                self.securityOverlay = SecurityOverlayView(
+                    frame: window.bounds,
+                    warningMessage: self.screenRecordingWarningMessage
+                )
+                self.securityOverlay?.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            }
+            
+            if let overlay = self.securityOverlay, overlay.superview == nil {
+                window.addSubview(overlay)
+                window.bringSubviewToFront(overlay)
+            }
+            
+            if self.isDebugMode {
+                print("AppSecurityLock: Security overlay shown")
+            }
+        }
+    }
+    
+    /// 隐藏安全覆盖视图
+    private func hideSecurityOverlay() {
+        DispatchQueue.main.async { [weak self] in
+            if let overlay = self?.securityOverlay, overlay.superview != nil {
+                overlay.removeFromSuperview()
+            }
+            
+            if self?.isDebugMode == true {
+                print("AppSecurityLock: Security overlay hidden")
+            }
+        }
+    }
+}
+
+// MARK: - 安全覆盖视图（防止录屏内容泄露）
+
+/// 自定义安全覆盖视图（拦截触摸+模糊效果）
+class SecurityOverlayView: UIView {
+    private let blurView: UIVisualEffectView
+    private let warningLabel: UILabel
+    
+    override init(frame: CGRect) {
+        // 设置模糊背景
+        let blurEffect = UIBlurEffect(style: .systemThickMaterial)
+        blurView = UIVisualEffectView(effect: blurEffect)
+        blurView.frame = CGRect(origin: .zero, size: frame.size)
+        
+        // 设置警告标签
+        warningLabel = UILabel()
+        warningLabel.text = "屏幕正在被录制"
+        warningLabel.textColor = UIColor.red
+        warningLabel.textAlignment = .center
+        warningLabel.numberOfLines = 0
+        warningLabel.font = UIFont.boldSystemFont(ofSize: 20)
+        
+        super.init(frame: frame)
+        
+        self.backgroundColor = UIColor.clear
+        
+        // 添加子视图
+        blurView.contentView.addSubview(warningLabel)
+        addSubview(blurView)
+        
+        // 设置标签约束
+        warningLabel.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            warningLabel.centerXAnchor.constraint(equalTo: blurView.contentView.centerXAnchor),
+            warningLabel.centerYAnchor.constraint(equalTo: blurView.contentView.centerYAnchor),
+            warningLabel.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 20),
+            warningLabel.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -20)
+        ])
+    }
+    
+    init(frame: CGRect, warningMessage: String) {
+        // 设置模糊背景
+        let blurEffect = UIBlurEffect(style: .systemThickMaterial)
+        blurView = UIVisualEffectView(effect: blurEffect)
+        blurView.frame = CGRect(origin: .zero, size: frame.size)
+        
+        // 设置警告标签
+        warningLabel = UILabel()
+        warningLabel.text = warningMessage
+        warningLabel.textColor = UIColor.red
+        warningLabel.textAlignment = .center
+        warningLabel.numberOfLines = 0
+        warningLabel.font = UIFont.boldSystemFont(ofSize: 20)
+        
+        super.init(frame: frame)
+        
+        self.backgroundColor = UIColor.clear
+        
+        // 添加子视图
+        blurView.contentView.addSubview(warningLabel)
+        addSubview(blurView)
+        
+        // 设置标签约束
+        warningLabel.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            warningLabel.centerXAnchor.constraint(equalTo: blurView.contentView.centerXAnchor),
+            warningLabel.centerYAnchor.constraint(equalTo: blurView.contentView.centerYAnchor),
+            warningLabel.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 20),
+            warningLabel.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -20)
+        ])
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    // 拦截所有触摸事件
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        // 返回自身表示拦截所有触摸事件
+        return self
     }
 }

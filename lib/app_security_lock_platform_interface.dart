@@ -13,6 +13,9 @@ enum LockReason {
   /// 触摸超时（无操作超时）
   touchTimeout,
 
+  /// 手动锁定
+  manual,
+
   /// 未知原因
   unknown,
 }
@@ -124,5 +127,15 @@ abstract class AppSecurityLockPlatform extends PlatformInterface {
   /// 用户交互时调用（主要用于Android平台）
   void onUserInteraction() {
     throw UnimplementedError('onUserInteraction() has not been implemented.');
+  }
+
+  /// 启用/禁用录屏防护
+  /// [warningMessage] 屏幕录制时显示的警告文本
+  Future<void> setScreenRecordingProtectionEnabled(
+    bool enabled, {
+    String? warningMessage,
+  }) {
+    throw UnimplementedError(
+        'setScreenRecordingProtectionEnabled() has not been implemented.');
   }
 }

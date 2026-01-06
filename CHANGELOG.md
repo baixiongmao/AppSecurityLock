@@ -1,3 +1,57 @@
+## 0.3.0
+
+### 🎬 屏幕录制防护功能
+
+本版本新增了强大的屏幕录制防护功能，确保应用内容不被非法录屏。
+
+### ✨ 新特性
+
+- **屏幕录制防护**: 禁止对应用进行屏幕录制
+- **自定义警告文本**: 支持自定义录屏时显示的警告提示文本 **仅限IOS**
+- **iOS 模糊覆盖视图**: 检测到录屏时显示带有模糊效果的安全覆盖层
+- **Android FLAG_SECURE**: 使用系统级别的FLAG_SECURE标志禁止屏幕录制
+
+### 📱 平台实现
+
+#### iOS
+- 监听屏幕录制状态变化通知 (`UIScreen.capturedDidChangeNotification`)
+- 检测到录屏时显示模糊效果的安全覆盖视图
+- 覆盖视图上显示自定义的警告文本
+- 拦截所有触摸事件防止操作被录制
+
+#### Android
+- 使用 `WindowManager.LayoutParams.FLAG_SECURE` 标志禁止屏幕录制
+- 防止应用内容在屏幕录制中出现
+
+### 🔧 新增 API
+
+```dart
+// 启用/禁用录屏防护，支持自定义警告文本
+Future<AppSecurityLock> screenRecordingProtectionEnabled(
+  bool enabled, {
+  String? warningMessage,
+})
+```
+
+### 💡 使用示例
+
+```dart
+// 启用录屏防护并显示自定义文本
+await lock.screenRecordingProtectionEnabled(
+  true,
+  warningMessage: '⚠️ 检测到屏幕录制，该操作已被阻止',
+);
+
+// 禁用录屏防护
+await lock.screenRecordingProtectionEnabled(false);
+
+// 也可以使用链式调用
+await lock.screenRecordingProtectionEnabled(
+  true,
+  warningMessage: '屏幕正在被录制',
+);
+```
+
 ## 0.2.0
 
 ### 🎉 API 重构 & 链式调用支持

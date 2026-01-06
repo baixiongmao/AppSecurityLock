@@ -18,6 +18,7 @@ class _MyAppState extends State<MyApp> {
   bool isLocked = false;
   bool isBackgroundLocked = false;
   bool isScreenLocked = true;
+  bool isScreenRecordingProtected = false;
   final List<String> _logs = [];
 
   void _addLog(String message) {
@@ -37,8 +38,9 @@ class _MyAppState extends State<MyApp> {
         setState(() => isLocked = true);
       })
       ..onUnlock(() {
-        _addLog('请解锁应用');
-        setState(() => isLocked = true);
+        _addLog('应用已解锁');
+        // Unlock callback when calling setLocked(false)
+        setState(() => isLocked = false);
       })
       ..onForeground(() {
         _addLog('应用进入前台');
@@ -94,6 +96,7 @@ class _MyAppState extends State<MyApp> {
                   ),
                 ),
                 const SizedBox(height: 16),
+
                 // Touch Timeout Controls
                 Card(
                   child: Padding(
@@ -242,6 +245,41 @@ class _MyAppState extends State<MyApp> {
                                 onChanged: (value) {
                                   setState(() => isScreenLocked = value);
                                   _appSecurityLock.screenLockEnabled(value);
+                                }),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Screen Recording Protection:',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Text('禁止录屏:'),
+                            Switch(
+                                value: isScreenRecordingProtected,
+                                onChanged: (value) async {
+                                  setState(
+                                      () => isScreenRecordingProtected = value);
+                                  await _appSecurityLock
+                                      .screenRecordingProtectionEnabled(
+                                    value,
+                                    warningMessage: '⚠️ 检测到屏幕录制，该操作已被阻止',
+                                  );
+                                  _addLog('录屏防护已${value ? '启用' : '禁用'}');
                                 }),
                           ],
                         ),

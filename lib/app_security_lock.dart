@@ -59,6 +59,7 @@ class AppSecurityLock {
   /// - [LockReason.screenLock] 设备屏幕锁定
   /// - [LockReason.backgroundTimeout] 后台超时
   /// - [LockReason.touchTimeout] 触摸超时（无操作超时）
+  /// - [LockReason.manual] 手动锁定
   /// - [LockReason.unknown] 未知原因
   ///
   /// 通常用于显示解锁界面
@@ -154,6 +155,23 @@ class AppSecurityLock {
   /// 手动重置无操作计时，延长超时时间
   AppSecurityLock resetTouchTimer() {
     AppSecurityLockPlatform.instance.restartTouchTimer();
+    return this;
+  }
+
+  // ============ 录屏防护设置 ============
+
+  /// 启用/禁用录屏防护
+  ///
+  /// 启用后，将禁止对应用进行屏幕录制
+  /// [warningMessage] 屏幕录制时显示的警告文本，默认为"屏幕正在被录制"
+  Future<AppSecurityLock> screenRecordingProtectionEnabled(
+    bool enabled, {
+    String? warningMessage,
+  }) async {
+    await AppSecurityLockPlatform.instance.setScreenRecordingProtectionEnabled(
+      enabled,
+      warningMessage: warningMessage,
+    );
     return this;
   }
 

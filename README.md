@@ -283,6 +283,12 @@ class _MyAppState extends State<MyApp> {
 | `touchTimeout(double)` | Set touch timeout (seconds) |
 | `resetTouchTimer()` | Reset the inactivity timer |
 
+### Screen Recording Protection (New in v0.3.0)
+
+| Method | Description |
+|--------|-------------|
+| `screenRecordingProtectionEnabled(bool, {String? warningMessage})` | Enable/disable screen recording protection with optional custom warning message |
+
 ## Migration from v0.1.x
 
 If you're upgrading from v0.1.x, here's how to migrate:
@@ -300,6 +306,105 @@ _lock
 await _lock.backgroundTimeout(30.0);
 ```
 
+## Screen Recording Protection (New in v0.3.0)
+
+Protect your app from unwanted screen recordings with built-in protection and customizable warning messages.
+
+### Features
+
+- **Prevent Screen Recording**: Blocks screen recording attempts on both iOS and Android
+- **Custom Warning Messages**: Display custom warning text when recording is detected (iOS)
+- **Security Overlay**: Shows a blurred overlay with warning when screen recording starts (iOS)
+- **Touch Event Blocking**: Prevents recorded interactions from being captured (iOS)
+
+### Basic Usage
+
+```dart
+// Enable screen recording protection
+await _lock.screenRecordingProtectionEnabled(true);
+
+// Enable with custom warning message (shows on iOS)
+await _lock.screenRecordingProtectionEnabled(
+  true,
+  warningMessage: '⚠️ Screen recording detected, this operation is blocked',
+);
+
+// Disable screen recording protection
+await _lock.screenRecordingProtectionEnabled(false);
+```
+
+### Chain Call Usage
+
+```dart
+await _lock
+  .screenRecordingProtectionEnabled(
+    true,
+    warningMessage: 'Screen is being recorded',
+  );
+```
+
+### Platform-Specific Behavior
+
+**iOS:**
+- Monitors `UIScreen.capturedDidChangeNotification` for screen recording status changes
+- When recording is detected, displays a full-screen blurred overlay with your custom warning message
+- All touch events are intercepted and blocked during recording
+- Overlay is automatically hidden when recording stops
+
+**Android:**
+- Uses `WindowManager.LayoutParams.FLAG_SECURE` to prevent app content from appearing in screen recordings
+- The system prevents the app window from being captured at the OS level
+- No visible warning needed as the content is automatically protected
+
+### Example
+
+```dart
+class _MyAppState extends State<MyApp> {
+  late final AppSecurityLock _lock;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    _lock = AppSecurityLock()
+      ..onLock((reason) => _showAuthenticationScreen())
+      ..onForeground(() => print('App entered foreground'))
+      ..onBackground(() => print('App entered background'));
+
+    _lock.init(
+      isScreenLockEnabled: true,
+      isBackgroundLockEnabled: true,
+      backgroundTimeout: 30.0,
+      debug: true,
+    );
+
+    // Enable screen recording protection
+    _setupScreenRecordingProtection();
+  }
+
+  Future<void> _setupScreenRecordingProtection() async {
+    await _lock.screenRecordingProtectionEnabled(
+      true,
+      warningMessage: '检测到屏幕录制，该操作已被阻止',
+    );
+  }
+
+  void _showAuthenticationScreen() {
+    // Implement your authentication UI here
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(title: const Text('Secure App')),
+        body: const Center(child: Text('Your secure app')),
+      ),
+    );
+  }
+}
+```
+
 ## Platform-Specific Behavior
 
 ### iOS
@@ -307,12 +412,14 @@ await _lock.backgroundTimeout(30.0);
 - Uses `protectedData` notifications for reliable screen lock detection
 - Supports background timeout with timers
 - Touch detection via gesture recognizers
+- Screen recording protection via `UIScreen.capturedDidChangeNotification` with blurred security overlay
 
 ### Android
 - Uses `Application.ActivityLifecycleCallbacks`
 - Monitors screen state with broadcast receivers (`ACTION_SCREEN_OFF`, `ACTION_SCREEN_ON`, `ACTION_USER_PRESENT`)
 - Supports background timeout with handlers
 - Touch detection via Window.Callback
+- Screen recording protection via `WindowManager.LayoutParams.FLAG_SECURE`
 
 ## License
 

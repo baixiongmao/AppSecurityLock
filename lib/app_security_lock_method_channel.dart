@@ -30,6 +30,8 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
           return LockReason.backgroundTimeout;
         case 'touchTimeout':
           return LockReason.touchTimeout;
+        case 'manual':
+          return LockReason.manual;
         default:
           return LockReason.unknown;
       }
@@ -163,5 +165,19 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
   @override
   void restartTouchTimer() {
     methodChannel.invokeMethod('restartTouchTimer');
+  }
+
+  /// 启用/禁用录屏防护
+  @override
+  Future<void> setScreenRecordingProtectionEnabled(
+    bool enabled, {
+    String? warningMessage,
+  }) {
+    final Map<String, dynamic> arguments = {'enabled': enabled};
+    if (warningMessage != null) {
+      arguments['warningMessage'] = warningMessage;
+    }
+    return methodChannel.invokeMethod(
+        'setScreenRecordingProtectionEnabled', arguments);
   }
 }

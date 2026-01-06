@@ -73,6 +73,9 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private var isTouchListenerSetup = false
     private var lastTouchTime: Long = 0L
     private var originalCallback: android.view.Window.Callback? = null
+    
+    // 录屏防护相关
+    private var isScreenRecordingProtectionEnabled = false
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, CHANNEL_NAME)
@@ -146,6 +149,13 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 result.success(null)
             }
 
+            "setScreenRecordingProtectionEnabled" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                val warningMessage = call.argument<String>("warningMessage")
+                setScreenRecordingProtectionEnabled(enabled, warningMessage)
+                result.success(null)
+            }
+
             else -> {
                 result.notImplemented()
             }
@@ -178,6 +188,9 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             debug = it
         }
 
+        // 立即打印 debug 模式状态（用于调试）
+        Log.d(TAG, "Debug mode is ${if (debug) "ENABLED" else "DISABLED"}")
+
         if (debug) {
             Log.d(
                 TAG,
@@ -185,7 +198,8 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 "isBackgroundLockEnabled: $isBackgroundLockEnabled, " +
                 "backgroundTimeout: $backgroundTimeout, " +
                 "isTouchTimeoutEnabled: $isTouchTimeoutEnabled, " +
-                "touchTimeout: $touchTimeout"
+                "touchTimeout: $touchTimeout, " +
+                "debug: $debug"
         )
         }
         
@@ -213,15 +227,33 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     // 设置锁定状态
     private fun setLockEnabled(enabled: Boolean) {
+        val wasLocked = isLocked
         isLocked = enabled
         if (debug) {
             Log.d(TAG, "Lock state changed to: $enabled")
         }
 
-        // 如果解锁，重新启动触摸超时功能
-        if (!enabled && isTouchTimeoutEnabled) {
-            setupTouchListener()
-            startTouchTimeout()
+        // 如果从解锁状态变为锁定状态，触发手动锁定回调
+        if (!wasLocked && enabled) {
+            if (debug) {
+                Log.d(TAG, "应用已手动锁定，触发锁定回调")
+            }
+            stopAllTimers()
+            removeTouchListener()
+            invokeMethod("onAppLocked", mapOf("reason" to "manual"))
+        }
+        // 如果从锁定状态变为解锁状态，触发解锁回调
+        else if (wasLocked && !enabled) {
+            if (debug) {
+                Log.d(TAG, "应用已解锁，触发解锁回调")
+            }
+            invokeMethod("onAppUnlocked", null)
+            
+            // 解锁后重新启动触摸超时功能（如果启用）
+            if (isTouchTimeoutEnabled) {
+                setupTouchListener()
+                startTouchTimeout()
+            }
         }
     }
 
@@ -689,9 +721,8 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             }
             
             invokeMethod("onEnterForeground", null)
-            if (isLocked) {
-                invokeMethod("onAppUnlocked", null)
-            }
+            // 注意：不再在进入前台时自动触发解锁回调
+            // 应用解锁应该由用户通过 UI 操作手动触发（调用 setLocked(false)）
         }
     }
 
@@ -788,6 +819,9 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         stopAllTimers()
         removeTouchListener()
         
+        // 禁用录屏防护
+        setScreenRecordingProtectionEnabled(false)
+        
         context?.let { ctx ->
             if (ctx is Application) {
                 ctx.unregisterActivityLifecycleCallbacks(this)
@@ -795,5 +829,46 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         }
         
         context = null
+    }
+
+    // MARK: - 录屏防护方法
+    
+    /// 设置录屏防护
+    /// [warningMessage] 可选的警告文本参数（供iOS使用）
+    private fun setScreenRecordingProtectionEnabled(enabled: Boolean, warningMessage: String? = null) {
+        isScreenRecordingProtectionEnabled = enabled
+        
+        activity?.let { act ->
+            try {
+                if (enabled) {
+                    // 启用录屏防护：禁止对窗口内容进行录屏
+                    // 在Android中，可以通过FLAG_SECURE标志禁止屏幕录制
+                    act.window.setFlags(
+                        android.view.WindowManager.LayoutParams.FLAG_SECURE,
+                        android.view.WindowManager.LayoutParams.FLAG_SECURE
+                    )
+                    
+                    if (debug) {
+                        Log.d(TAG, "Screen recording protection enabled")
+                        if (warningMessage != null) {
+                            Log.d(TAG, "Warning message: $warningMessage")
+                        }
+                    }
+                } else {
+                    // 禁用录屏防护：移除FLAG_SECURE标志
+                    act.window.clearFlags(
+                        android.view.WindowManager.LayoutParams.FLAG_SECURE
+                    )
+                    
+                    if (debug) {
+                        Log.d(TAG, "Screen recording protection disabled")
+                    }
+                }
+            } catch (e: Exception) {
+                if (debug) {
+                    Log.e(TAG, "Failed to set screen recording protection", e)
+                }
+            }
+        }
     }
 }
