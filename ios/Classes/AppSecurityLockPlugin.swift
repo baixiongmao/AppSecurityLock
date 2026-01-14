@@ -119,14 +119,14 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                     }
                     stopAllTimers()
                     removeTouchEventListeners()
-                    lifecycleChannel?.invokeMethod("onAppLocked", arguments: ["reason": "manual"])
+                    safeInvokeMethod("onAppLocked", arguments: ["reason": "manual"])
                 }
                 // 如果从锁定状态变为解锁状态，触发解锁回调
                 else if wasLocked && !enabled {
                     if isDebugMode {
                         print("Flutter: 应用已解锁，触发解锁回调")
                     }
-                    lifecycleChannel?.invokeMethod("onAppUnlocked", arguments: nil)
+                    safeInvokeMethod("onAppUnlocked", arguments: nil)
                     
                     // 解锁后重新启动触摸超时功能（如果启用）
                     if isTouchTimeoutEnabled {
@@ -272,6 +272,26 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         // 触摸事件监听将在 init 方法中根据配置决定是否启动
     }
 
+    // 安全地调用 Flutter 方法
+    private func safeInvokeMethod(_ method: String, arguments: Any?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let channel = self.lifecycleChannel else {
+                if self?.isDebugMode == true {
+                    print("AppSecurityLock: Cannot invoke method \(method), channel is nil")
+                }
+                return
+            }
+            
+            do {
+                channel.invokeMethod(method, arguments: arguments)
+            } catch {
+                if self.isDebugMode {
+                    print("AppSecurityLock: Failed to invoke method \(method): \(error)")
+                }
+            }
+        }
+    }
+
     @objc private func onEnterForeground() {
         if isDebugMode {
             print("App 进入前台")
@@ -279,7 +299,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         // 停止亮度检测，因为应用已进入前台
         stopAllTimers()
         // 启动触摸定时器
-        lifecycleChannel?.invokeMethod("onEnterForeground", arguments: nil)
+        safeInvokeMethod("onEnterForeground", arguments: nil)
         
         // 注意：不再在进入前台时自动触发解锁回调
         // 应用解锁应该由用户通过 UI 操作手动触发（调用 setLocked(false)）
@@ -295,7 +315,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         if isDebugMode {
             print("App 进入后台")
         }
-        lifecycleChannel?.invokeMethod("onEnterBackground", arguments: nil)
+        safeInvokeMethod("onEnterBackground", arguments: nil)
         
         // 开始后台超时任务
         startBackgroundTimeoutTimer()
@@ -315,7 +335,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             isLocked = true
             stopAllTimers()
             removeTouchEventListeners()
-            lifecycleChannel?.invokeMethod("onAppLocked", arguments: ["reason": "screenLock"])
+            safeInvokeMethod("onAppLocked", arguments: ["reason": "screenLock"])
         } else {
             if isDebugMode {
                 if !isScreenLockEnabled {
@@ -381,7 +401,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             print("AppSecurityLock: App is locked due to background timeout")
         }
         // 触发锁定回调
-        self.lifecycleChannel?.invokeMethod("onAppLocked", arguments: ["reason": "backgroundTimeout"])
+        self.safeInvokeMethod("onAppLocked", arguments: ["reason": "backgroundTimeout"])
         // 停止后台超时定时器
         self.stopAllTimers()
     }
@@ -399,11 +419,13 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
 
     // 停止所有定时器
     private func stopAllTimers() {
-        if backgroundTimeoutTimer != nil {
-            stopBackgroundTimeoutTimer()
-        }
-        if touchTimer != nil {
-            stopTouchTimer()
+        do {
+            if backgroundTimeoutTimer != nil {
+                stopBackgroundTimeoutTimer()
+            }
+            if touchTimer != nil {
+                stopTouchTimer()
+            }
         }
     }
 
@@ -603,7 +625,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             }
 
             // 触发锁定回调
-            self.lifecycleChannel?.invokeMethod("onAppLocked", arguments: ["reason": "touchTimeout"])
+            self.safeInvokeMethod("onAppLocked", arguments: ["reason": "touchTimeout"])
 
             // 停止所有定时器
             self.stopAllTimers()
@@ -615,12 +637,44 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     deinit {
         // 清理资源
         stopAllTimers()
+        removeTouchEventListeners()
+        
+        // 移除所有观察者
         if isListening {
-            NotificationCenter.default.removeObserver(self)
-            isListening = false
+            do {
+                NotificationCenter.default.removeObserver(
+                    self,
+                    name: UIApplication.willEnterForegroundNotification,
+                    object: nil
+                )
+                NotificationCenter.default.removeObserver(
+                    self,
+                    name: UIApplication.didEnterBackgroundNotification,
+                    object: nil
+                )
+                NotificationCenter.default.removeObserver(
+                    self,
+                    name: UIApplication.protectedDataWillBecomeUnavailableNotification,
+                    object: nil
+                )
+                NotificationCenter.default.removeObserver(
+                    self,
+                    name: UIApplication.protectedDataDidBecomeAvailableNotification,
+                    object: nil
+                )
+                isListening = false
+            }
         }
+        
         // 禁用录屏防护
         setScreenRecordingProtectionEnabled(false)
+        
+        // 清空所有引用
+        lifecycleChannel = nil
+        touchGestureRecognizer = nil
+        panGestureRecognizer = nil
+        securityOverlay = nil
+        screenProtectionView = nil
     }
 
     // MARK: - 录屏防护方法

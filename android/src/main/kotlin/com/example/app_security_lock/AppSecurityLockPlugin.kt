@@ -487,12 +487,18 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     private fun stopBackgroundTimeoutTimer() {
-        backgroundTimeoutRunnable?.let {
-            backgroundTimeoutHandler?.removeCallbacks(it)
-            backgroundTimeoutRunnable = null
-            backgroundTimeoutHandler = null
+        try {
+            backgroundTimeoutRunnable?.let {
+                backgroundTimeoutHandler?.removeCallbacks(it)
+                backgroundTimeoutRunnable = null
+                backgroundTimeoutHandler = null
+                if (debug) {
+                    Log.d(TAG, "停止后台超时检测")
+                }
+            }
+        } catch (e: Exception) {
             if (debug) {
-                Log.d(TAG, "停止后台超时检测")
+                Log.e(TAG, "停止后台超时定时器失败", e)
             }
         }
     }
@@ -556,12 +562,18 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
     
     private fun stopTouchTimeout() {
-        touchTimeoutRunnable?.let {
-            touchTimeoutHandler?.removeCallbacks(it)
-            touchTimeoutRunnable = null
-            touchTimeoutHandler = null
+        try {
+            touchTimeoutRunnable?.let {
+                touchTimeoutHandler?.removeCallbacks(it)
+                touchTimeoutRunnable = null
+                touchTimeoutHandler = null
+                if (debug) {
+                    Log.d(TAG, "停止触摸超时检测")
+                }
+            }
+        } catch (e: Exception) {
             if (debug) {
-                Log.d(TAG, "停止触摸超时检测")
+                Log.e(TAG, "停止触摸超时定时器失败", e)
             }
         }
     }
@@ -642,21 +654,27 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     // 移除触摸监听器
     private fun removeTouchListener() {
         if (isTouchListenerSetup) {
-            activity?.let { act ->
-                try {
-                    // 恢复原始的Window.Callback
-                    if (originalCallback != null) {
-                        act.window.callback = originalCallback
+            try {
+                activity?.let { act ->
+                    try {
+                        // 恢复原始的Window.Callback
+                        if (originalCallback != null) {
+                            act.window.callback = originalCallback
+                        }
+                    } catch (e: Exception) {
+                        if (debug) {
+                            Log.e(TAG, "恢复Window.Callback失败", e)
+                        }
                     }
-                    isTouchListenerSetup = false
-                    touchListener = null
-                    if (debug) {
-                        Log.d(TAG, "Window触摸拦截器已移除")
-                    }
-                } catch (e: Exception) {
-                    if (debug) {
-                        Log.e(TAG, "移除触摸监听器失败", e)
-                    }
+                }
+                isTouchListenerSetup = false
+                touchListener = null
+                if (debug) {
+                    Log.d(TAG, "Window触摸拦截器已移除")
+                }
+            } catch (e: Exception) {
+                if (debug) {
+                    Log.e(TAG, "移除触摸监听器失败", e)
                 }
             }
         }
@@ -681,11 +699,17 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private fun invokeMethod(method: String, arguments: Any?) {
         try {
             Handler(Looper.getMainLooper()).post {
-                channel.invokeMethod(method, arguments)
+                try {
+                    channel.invokeMethod(method, arguments)
+                } catch (e: Exception) {
+                    if (debug) {
+                        Log.e(TAG, "调用方法 $method 失败，可能是Flutter引擎已销毁", e)
+                    }
+                }
             }
         } catch (e: Exception) {
             if (debug) {
-                Log.e(TAG, "调用方法 $method 失败", e)
+                Log.e(TAG, "Post invokeMethod $method 失败", e)
             }
         }
     }
@@ -768,6 +792,15 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         if (debug) {
             Log.d(TAG, "onActivityDestroyed: ${activity.localClassName}")
         }
+        
+        // 当Activity被销毁时，清理所有定时器和监听器
+        stopAllTimers()
+        removeTouchListener()
+        
+        // 仅在销毁的是当前Activity时才清空activity引用
+        if (activity == this.activity) {
+            this.activity = null
+        }
     }
 
     // ActivityAware 实现
@@ -815,19 +848,38 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         if (debug) {
             Log.d(TAG, "onDetachedFromEngine")
         }
-        channel.setMethodCallHandler(null)
+        
+        try {
+            // 设置null之前停止处理方法调用
+            channel.setMethodCallHandler(null)
+        } catch (e: Exception) {
+            if (debug) {
+                Log.e(TAG, "setMethodCallHandler failed", e)
+            }
+        }
+        
+        // 清理所有资源
         stopAllTimers()
         removeTouchListener()
         
         // 禁用录屏防护
         setScreenRecordingProtectionEnabled(false)
         
-        context?.let { ctx ->
-            if (ctx is Application) {
-                ctx.unregisterActivityLifecycleCallbacks(this)
+        // 注销生命周期回调
+        try {
+            context?.let { ctx ->
+                if (ctx is Application) {
+                    ctx.unregisterActivityLifecycleCallbacks(this)
+                }
+            }
+        } catch (e: Exception) {
+            if (debug) {
+                Log.e(TAG, "unregisterActivityLifecycleCallbacks failed", e)
             }
         }
         
+        isListening = false
+        activity = null
         context = null
     }
 
