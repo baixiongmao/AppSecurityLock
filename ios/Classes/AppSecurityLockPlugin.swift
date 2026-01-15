@@ -304,6 +304,11 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         // 注意：不再在进入前台时自动触发解锁回调
         // 应用解锁应该由用户通过 UI 操作手动触发（调用 setLocked(false)）
         
+        // 检查录屏状态（如果录屏防护已启用）
+        if isScreenRecordingProtectionEnabled {
+            checkScreenRecording()
+        }
+        
         // 重新启动触摸超时功能（如果启用的话）
         if isTouchTimeoutEnabled && !isLocked {
             setupTouchEventListeners()
@@ -635,39 +640,47 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     }
 
     deinit {
-        // 清理资源
+        // 清理资源 - 直接同步清理，避免异步操作
         stopAllTimers()
         removeTouchEventListeners()
         
         // 移除所有观察者
         if isListening {
-            do {
-                NotificationCenter.default.removeObserver(
-                    self,
-                    name: UIApplication.willEnterForegroundNotification,
-                    object: nil
-                )
-                NotificationCenter.default.removeObserver(
-                    self,
-                    name: UIApplication.didEnterBackgroundNotification,
-                    object: nil
-                )
-                NotificationCenter.default.removeObserver(
-                    self,
-                    name: UIApplication.protectedDataWillBecomeUnavailableNotification,
-                    object: nil
-                )
-                NotificationCenter.default.removeObserver(
-                    self,
-                    name: UIApplication.protectedDataDidBecomeAvailableNotification,
-                    object: nil
-                )
-                isListening = false
-            }
+            NotificationCenter.default.removeObserver(
+                self,
+                name: UIApplication.willEnterForegroundNotification,
+                object: nil
+            )
+            NotificationCenter.default.removeObserver(
+                self,
+                name: UIApplication.didEnterBackgroundNotification,
+                object: nil
+            )
+            NotificationCenter.default.removeObserver(
+                self,
+                name: UIApplication.protectedDataWillBecomeUnavailableNotification,
+                object: nil
+            )
+            NotificationCenter.default.removeObserver(
+                self,
+                name: UIApplication.protectedDataDidBecomeAvailableNotification,
+                object: nil
+            )
+            isListening = false
         }
         
-        // 禁用录屏防护
-        setScreenRecordingProtectionEnabled(false)
+        // 直接清理录屏防护相关资源，不使用异步操作
+        // 移除录屏防护观察者
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIScreen.capturedDidChangeNotification,
+            object: nil
+        )
+        
+        // 同步移除安全覆盖视图（不使用异步）
+        if let overlay = securityOverlay, overlay.superview != nil {
+            overlay.removeFromSuperview()
+        }
         
         // 清空所有引用
         lifecycleChannel = nil
@@ -711,13 +724,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             object: nil
         )
         
-        // 应用回到前台时检查
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(checkScreenRecording),
-            name: UIApplication.willEnterForegroundNotification,
-            object: nil
-        )
+        // 注意：不在这里添加 willEnterForegroundNotification 观察者
+        // 因为 startListen() 已经添加了，我们可以在 onEnterForeground 中调用 checkScreenRecording()
+        // 这样可以避免重复观察和清理时的冲突
         
         // 立即检查当前状态
         checkScreenRecording()
@@ -735,12 +744,10 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             object: nil
         )
         
-        NotificationCenter.default.removeObserver(
-            self,
-            name: UIApplication.willEnterForegroundNotification,
-            object: nil
-        )
+        // 注意：不在这里移除 willEnterForegroundNotification 观察者
+        // 因为它是在 startListen() 中添加的，用于其他功能
         
+        // 隐藏覆盖视图（使用异步，但确保安全）
         hideSecurityOverlay()
         
         if isDebugMode {
@@ -766,40 +773,59 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     
     /// 显示安全覆盖视图
     private func showSecurityOverlay() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let window = windowScene.windows.first else { return }
-            
-            if self.securityOverlay == nil {
-                self.securityOverlay = SecurityOverlayView(
-                    frame: window.bounds,
-                    warningMessage: self.screenRecordingWarningMessage
-                )
-                self.securityOverlay?.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        // 确保在主线程执行
+        if Thread.isMainThread {
+            performShowSecurityOverlay()
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.performShowSecurityOverlay()
             }
-            
-            if let overlay = self.securityOverlay, overlay.superview == nil {
-                window.addSubview(overlay)
-                window.bringSubviewToFront(overlay)
-            }
-            
-            if self.isDebugMode {
-                print("AppSecurityLock: Security overlay shown")
-            }
+        }
+    }
+    
+    /// 执行显示安全覆盖视图（必须在主线程调用）
+    private func performShowSecurityOverlay() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else { return }
+        
+        if securityOverlay == nil {
+            securityOverlay = SecurityOverlayView(
+                frame: window.bounds,
+                warningMessage: screenRecordingWarningMessage
+            )
+            securityOverlay?.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        }
+        
+        if let overlay = securityOverlay, overlay.superview == nil {
+            window.addSubview(overlay)
+            window.bringSubviewToFront(overlay)
+        }
+        
+        if isDebugMode {
+            print("AppSecurityLock: Security overlay shown")
         }
     }
     
     /// 隐藏安全覆盖视图
     private func hideSecurityOverlay() {
-        DispatchQueue.main.async { [weak self] in
-            if let overlay = self?.securityOverlay, overlay.superview != nil {
-                overlay.removeFromSuperview()
+        // 确保在主线程执行
+        if Thread.isMainThread {
+            performHideSecurityOverlay()
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.performHideSecurityOverlay()
             }
-            
-            if self?.isDebugMode == true {
-                print("AppSecurityLock: Security overlay hidden")
-            }
+        }
+    }
+    
+    /// 执行隐藏安全覆盖视图（必须在主线程调用）
+    private func performHideSecurityOverlay() {
+        if let overlay = securityOverlay, overlay.superview != nil {
+            overlay.removeFromSuperview()
+        }
+        
+        if isDebugMode {
+            print("AppSecurityLock: Security overlay hidden")
         }
     }
 }

@@ -1,3 +1,21 @@
+## 0.3.2
+. 修复 deinit 中的崩溃问题
+问题原因：
+在 deinit 中调用 setScreenRecordingProtectionEnabled(false) 会触发异步操作
+showSecurityOverlay() 和 hideSecurityOverlay() 使用了 DispatchQueue.main.async { [weak self] }
+对象正在释放时，weak 引用可能失效，导致崩溃
+修复方案：
+在 deinit 中直接同步清理资源，不再调用可能触发异步操作的方法
+直接同步移除安全覆盖视图，不使用异步操作
+直接移除观察者，避免调用其他方法
+2. 优化异步操作
+将 showSecurityOverlay() 和 hideSecurityOverlay() 拆分为同步和异步版本
+添加 performShowSecurityOverlay() 和 performHideSecurityOverlay() 方法，确保在主线程执行
+在正常使用时使用异步，在 deinit 中使用同步清理
+3. 修复观察者重复注册问题
+移除了 setupScreenRecordingProtection() 中重复的 willEnterForegroundNotification 观察者
+在 onEnterForeground() 中检查录屏状态，避免重复注册
+确保观察者的添加和移除成对出现
 ## 0.3.1
 
 ### 🛠️ 关键修复
