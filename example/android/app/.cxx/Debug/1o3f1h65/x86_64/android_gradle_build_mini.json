@@ -1,0 +1,20 @@
+{
+  "buildFiles": [
+    "/Users/pand/fvm/versions/3.29.0/packages/flutter_tools/gradle/src/main/groovy/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/Users/pand/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/Users/pand/Documents/code/Flutter/flutter_pub/app_security_lock/example/android/app/.cxx/Debug/1o3f1h65/x86_64",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/Users/pand/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/Users/pand/Documents/code/Flutter/flutter_pub/app_security_lock/example/android/app/.cxx/Debug/1o3f1h65/x86_64",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {}
+}
