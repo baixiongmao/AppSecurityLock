@@ -1,3 +1,6 @@
+## 0.3.3
+修复了一些问题
+
 ## 0.3.2
 . 修复 deinit 中的崩溃问题
 问题原因：
@@ -18,12 +21,12 @@ showSecurityOverlay() 和 hideSecurityOverlay() 使用了 DispatchQueue.main.asy
 确保观察者的添加和移除成对出现
 ## 0.3.1
 
-### 🛠️ 关键修复
+###  关键修复
 
 #### 应用后台清理崩溃问题修复
 本版本修复了一个严重的稳定性问题：当用户手动从最近任务列表中清理应用时，系统会错误地提示应用已崩溃。
 
-### 🔧 修复内容
+###  修复内容
 
 #### Android 平台修复
 - **Flutter 引擎销毁异常处理**: 在 `invokeMethod()` 中添加双层异常捕获，防止 Flutter 引擎销毁后尝试通信导致的崩溃
@@ -44,7 +47,7 @@ showSecurityOverlay() 和 hideSecurityOverlay() 使用了 DispatchQueue.main.asy
 - **内存泄漏防护**: 确保所有定时器、监听器和引用在适当时机被正确清理
 - **竞态条件处理**: 处理多线程环境下的资源清理竞态条件
 
-### 🧪 测试建议
+###  测试建议
 
 为验证修复效果，请按以下步骤测试：
 
@@ -54,18 +57,18 @@ showSecurityOverlay() 和 hideSecurityOverlay() 使用了 DispatchQueue.main.asy
 
 ## 0.3.0
 
-### 🎬 屏幕录制防护功能
+### 屏幕录制防护功能
 
 本版本新增了强大的屏幕录制防护功能，确保应用内容不被非法录屏。
 
-### ✨ 新特性
+### 新特性
 
 - **屏幕录制防护**: 禁止对应用进行屏幕录制
 - **自定义警告文本**: 支持自定义录屏时显示的警告提示文本 **仅限IOS**
 - **iOS 模糊覆盖视图**: 检测到录屏时显示带有模糊效果的安全覆盖层
 - **Android FLAG_SECURE**: 使用系统级别的FLAG_SECURE标志禁止屏幕录制
 
-### 📱 平台实现
+### 平台实现
 
 #### iOS
 - 监听屏幕录制状态变化通知 (`UIScreen.capturedDidChangeNotification`)
@@ -77,7 +80,7 @@ showSecurityOverlay() 和 hideSecurityOverlay() 使用了 DispatchQueue.main.asy
 - 使用 `WindowManager.LayoutParams.FLAG_SECURE` 标志禁止屏幕录制
 - 防止应用内容在屏幕录制中出现
 
-### 🔧 新增 API
+### 新增 API
 
 ```dart
 // 启用/禁用录屏防护，支持自定义警告文本
@@ -87,13 +90,13 @@ Future<AppSecurityLock> screenRecordingProtectionEnabled(
 })
 ```
 
-### 💡 使用示例
+### 使用示例
 
 ```dart
 // 启用录屏防护并显示自定义文本
 await lock.screenRecordingProtectionEnabled(
   true,
-  warningMessage: '⚠️ 检测到屏幕录制，该操作已被阻止',
+  warningMessage: '检测到屏幕录制，该操作已被阻止',
 );
 
 // 禁用录屏防护
@@ -108,11 +111,11 @@ await lock.screenRecordingProtectionEnabled(
 
 ## 0.2.0
 
-### 🎉 API 重构 & 链式调用支持
+### API 重构 & 链式调用支持
 
 本版本对 API 进行了全面重构，提供更简洁、更直观的使用方式。
 
-### ✨ 新特性
+### 新特性
 
 - **链式调用支持**: 所有方法现在支持链式调用，代码更简洁
 - **锁定原因回调**: `onLock` 回调现在包含 `LockReason` 参数，可以知道是什么导致了锁定
@@ -122,7 +125,7 @@ await lock.screenRecordingProtectionEnabled(
   - `LockReason.touchTimeout` - 触摸超时（无操作超时）
   - `LockReason.unknown` - 未知原因
 
-### 🔄 API 变更
+### API 变更
 
 | 旧 API | 新 API | 说明 |
 |---------|---------|------|
@@ -138,7 +141,7 @@ await lock.screenRecordingProtectionEnabled(
 | `setTouchTimeout(seconds)` | `touchTimeout(seconds)` | 支持链式调用 |
 | `restartTouchTimer()` | `resetTouchTimer()` | 更语义化 |
 
-### 📝 使用示例
+### 使用示例
 
 ```dart
 // 新的链式调用方式
@@ -158,7 +161,7 @@ await lock.init(
 );
 ```
 
-### ⚙️ 向后兼容
+### 向后兼容
 
 - 旧 API 仍然可用，但已标记为 `@Deprecated`
 - 建议尽快迁移到新 API
@@ -186,17 +189,17 @@ await lock.init(
 
 ### New Features
 
-- ✅ **Debug Control**: New debug field parameter to toggle log output
-- ✅ **Conditional Logging**: Logs are now shown only when debug mode is enabled
-- ✅ **Developer Experience**: Improved debugging workflow with controllable log verbosity
-- ✅ **Production Ready**: Clean log output in production builds when debug is disabled
+-  **Debug Control**: New debug field parameter to toggle log output
+-  **Conditional Logging**: Logs are now shown only when debug mode is enabled
+-  **Developer Experience**: Improved debugging workflow with controllable log verbosity
+-  **Production Ready**: Clean log output in production builds when debug is disabled
 
 ### Technical Improvements
 
-- 🔧 Added debug parameter support across all platform implementations
-- 🔧 Enhanced logging system with conditional output
-- 🔧 Improved development workflow with debug controls
-- 🔧 Optimized log management for production builds
+-  Added debug parameter support across all platform implementations
+-  Enhanced logging system with conditional output
+-  Improved development workflow with debug controls
+-  Optimized log management for production builds
 
 ## 0.0.6
 
@@ -209,25 +212,25 @@ await lock.init(
 
 ### iOS Implementation Changes
 
-- ✅ **New Lock Detection Method**: Implemented `protectedData` notification observers for reliable screen lock detection
-- ✅ **Removed Brightness Detection**: Completely removed unreliable brightness-based screen lock detection
-- ✅ **System-Level Integration**: Uses iOS native notification center for optimal performance
-- ✅ **Production Build Compatible**: Resolves screen lock detection failures in production/release builds
+-  **New Lock Detection Method**: Implemented `protectedData` notification observers for reliable screen lock detection
+-  **Removed Brightness Detection**: Completely removed unreliable brightness-based screen lock detection
+-  **System-Level Integration**: Uses iOS native notification center for optimal performance
+-  **Production Build Compatible**: Resolves screen lock detection failures in production/release builds
 
 ### Technical Improvements
 
-- 🔧 Added `screenLocked()` and `screenUnlocked()` callback methods
-- 🔧 Enhanced `startListen()` method with protectedData notification observers
-- 🔧 Cleaned up brightness timer and related detection methods
-- 🔧 Improved iOS app lifecycle integration
-- 🔧 Optimized notification center observer management
+-  Added `screenLocked()` and `screenUnlocked()` callback methods
+-  Enhanced `startListen()` method with protectedData notification observers
+-  Cleaned up brightness timer and related detection methods
+-  Improved iOS app lifecycle integration
+-  Optimized notification center observer management
 
 ### Bug Fixes
 
-- 🐛 Fixed screen lock detection not working in iOS production builds
-- 🐛 Resolved brightness threshold reliability issues
-- 🐛 Improved app state monitoring accuracy
-- 🐛 Enhanced notification system performance
+-  Fixed screen lock detection not working in iOS production builds
+-  Resolved brightness threshold reliability issues
+-  Improved app state monitoring accuracy
+-  Enhanced notification system performance
 
 ## 0.0.4
 
@@ -242,25 +245,25 @@ await lock.init(
 
 ### New APIs
 
-- ✅ `setTouchTimeoutEnabled(bool enabled)` - Enable/disable touch timeout functionality
-- ✅ `setTouchTimeout(double timeoutSeconds)` - Configure touch timeout duration
-- ✅ `restartTouchTimer()` - Manual restart of touch timeout timer
-- ✅ Support for touch timeout parameters in `init()` method
+-  `setTouchTimeoutEnabled(bool enabled)` - Enable/disable touch timeout functionality
+-  `setTouchTimeout(double timeoutSeconds)` - Configure touch timeout duration
+-  `restartTouchTimer()` - Manual restart of touch timeout timer
+-  Support for touch timeout parameters in `init()` method
 
 ### Platform Updates
 
-- ✅ **iOS**: Comprehensive gesture recognizer implementation with UIWindow-based touch detection
-- ✅ **Android**: Touch timeout timer management with Handler and Runnable
-- ✅ **iOS**: Upgraded minimum version to iOS 13.0 for enhanced functionality
-- ✅ Fixed infinite loop issues in touch event listener setup
-- ✅ Improved touch timer lifecycle management
+-  **iOS**: Comprehensive gesture recognizer implementation with UIWindow-based touch detection
+-  **Android**: Touch timeout timer management with Handler and Runnable
+-  **iOS**: Upgraded minimum version to iOS 13.0 for enhanced functionality
+-  Fixed infinite loop issues in touch event listener setup
+-  Improved touch timer lifecycle management
 
 ### Bug Fixes
 
-- 🐛 Fixed touch event listener infinite loop during screen interactions
-- 🐛 Resolved touch timer not restarting properly after unlock
-- 🐛 Fixed touch event listeners not being set up correctly on init
-- 🐛 Improved touch timer state management during app lifecycle changes
+-  Fixed touch event listener infinite loop during screen interactions
+-  Resolved touch timer not restarting properly after unlock
+-  Fixed touch event listeners not being set up correctly on init
+-  Improved touch timer state management during app lifecycle changes
 
 ## 0.0.3
 
@@ -272,10 +275,10 @@ await lock.init(
 
 ### Changes
 
-- ✅ Added `Package.swift` file for Swift Package Manager support
-- ✅ Configured iOS platform minimum version (iOS 11.0+)
-- ✅ Enhanced pub.dev scoring compliance
-- ✅ Improved iOS integration options for developers
+-  Added `Package.swift` file for Swift Package Manager support
+-  Configured iOS platform minimum version (iOS 11.0+)
+-  Enhanced pub.dev scoring compliance
+-  Improved iOS integration options for developers
 
 ## 0.0.2
 
@@ -290,12 +293,12 @@ await lock.init(
 
 ### Changes
 
-- ✅ Updated pubspec.yaml with complete repository information
-- ✅ Enhanced CHANGELOG with detailed release notes
-- ✅ Improved example app UI with event logs display
-- ✅ Fixed all dart analyze issues (0 warnings)
-- ✅ Updated test files to match current API
-- ✅ Better error handling and code documentation
+-  Updated pubspec.yaml with complete repository information
+-  Enhanced CHANGELOG with detailed release notes
+-  Improved example app UI with event logs display
+-  Fixed all dart analyze issues (0 warnings)
+-  Updated test files to match current API
+-  Better error handling and code documentation
 
 ## 0.0.1
 
@@ -310,12 +313,12 @@ await lock.init(
 
 ### Features
 
-- ✅ Screen lock/unlock detection
-- ✅ Background timeout with configurable duration
-- ✅ Application lifecycle monitoring
-- ✅ Biometric authentication integration
-- ✅ iOS and Android platform support
-- ✅ Easy integration with existing Flutter apps
+-  Screen lock/unlock detection
+-  Background timeout with configurable duration
+-  Application lifecycle monitoring
+-  Biometric authentication integration
+-  iOS and Android platform support
+-  Easy integration with existing Flutter apps
 
 ### Platform Support
 
