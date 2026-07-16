@@ -129,8 +129,8 @@ abstract class AppSecurityLockPlatform extends PlatformInterface {
     throw UnimplementedError('onUserInteraction() has not been implemented.');
   }
 
-  /// 启用/禁用录屏防护
-  /// [warningMessage] 屏幕录制时显示的警告文本
+  /// 启用/禁用截屏与录屏防护
+  /// [warningMessage] iOS 录屏时显示的警告文本
   Future<void> setScreenRecordingProtectionEnabled(
     bool enabled, {
     String? warningMessage,

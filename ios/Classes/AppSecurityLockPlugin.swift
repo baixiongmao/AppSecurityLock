@@ -37,11 +37,13 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     // 倒计时相关
     private var touchStartTime: Date?
     
-    // 录屏防护相关
+    // 录屏/截屏防护相关
     private var isScreenRecordingProtectionEnabled = false
-    private var screenProtectionView: UIView?
+    private var screenshotProtectedView: ScreenshotProtectedView?
+    private var securityOverlayWindow: UIWindow?
     private var securityOverlay: SecurityOverlayView?
     private var screenRecordingWarningMessage: String = "屏幕正在被录制"
+
 
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(
@@ -669,111 +671,183 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             isListening = false
         }
         
-        // 直接清理录屏防护相关资源，不使用异步操作
-        // 移除录屏防护观察者
+        // 直接清理录屏/截屏防护相关资源，不使用异步操作
         NotificationCenter.default.removeObserver(
             self,
             name: UIScreen.capturedDidChangeNotification,
             object: nil
         )
         
-        // 同步移除安全覆盖视图（不使用异步）
-        if let overlay = securityOverlay, overlay.superview != nil {
-            overlay.removeFromSuperview()
-        }
+        disableScreenshotProtection()
         
-        // 清空所有引用
+        securityOverlayWindow?.isHidden = true
+        securityOverlayWindow = nil
+        securityOverlay = nil
+        
         lifecycleChannel = nil
         touchGestureRecognizer = nil
         panGestureRecognizer = nil
-        securityOverlay = nil
-        screenProtectionView = nil
     }
 
-    // MARK: - 录屏防护方法
+    // MARK: - 录屏/截屏防护方法
     
-    /// 设置录屏防护
+    /// 设置录屏与截屏防护
+    ///
+    /// - 开启时：静默启用 secure 保护（截图露出底层占位文案，平时界面正常）
+    /// - 录屏中：显示 warningMessage 全屏遮罩
+    /// - 截屏后不再弹遮罩
     private func setScreenRecordingProtectionEnabled(_ enabled: Bool, warningMessage: String? = nil) {
         isScreenRecordingProtectionEnabled = enabled
         
-        // 更新警告文本
         if let message = warningMessage {
             screenRecordingWarningMessage = message
+            screenshotProtectedView?.setPlaceholderText(message)
+            securityOverlay?.updateWarningMessage(message)
         }
         
-        if enabled {
-            if isDebugMode {
-                print("AppSecurityLock: Setting up screen recording protection")
+        let run: () -> Void = { [weak self] in
+            guard let self = self else { return }
+            if enabled {
+                self.enableScreenshotProtection()
+                self.setupScreenRecordingProtection()
+            } else {
+                self.removeScreenRecordingProtection()
+                self.disableScreenshotProtection()
             }
-            setupScreenRecordingProtection()
+        }
+        
+        if Thread.isMainThread {
+            run()
         } else {
-            if isDebugMode {
-                print("AppSecurityLock: Removing screen recording protection")
-            }
-            removeScreenRecordingProtection()
+            DispatchQueue.main.sync(execute: run)
         }
     }
     
-    /// 设置屏幕录制监听
+    private func getKeyWindow() -> UIWindow? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.flatMap { $0.windows }.first { $0.isKeyWindow }
+            ?? scenes.flatMap { $0.windows }.first
+    }
+    
+    private func getActiveWindowScene() -> UIWindowScene? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+    }
+    
+    /// 启用截屏保护（Flutter 可用方案）：
+    /// - 不把 secure canvas UIView 拆出来 addSubview（那会导致 Flutter 黑屏）
+    /// - 保留 UITextField 在层级中，把 flutter.layer 挂到 field 内部 secure sublayer
+    /// - 占位层作为更低的兄弟层，截图时浮现
+    private func enableScreenshotProtection() {
+        guard let window = getKeyWindow(),
+              let flutterView = window.rootViewController?.view else {
+            if isDebugMode {
+                print("AppSecurityLock: Failed to enable screenshot protection - no window/view")
+            }
+            return
+        }
+
+        if let protectedView = screenshotProtectedView {
+            protectedView.setPlaceholderText(screenRecordingWarningMessage)
+            return
+        }
+
+        let protectedView = ScreenshotProtectedView(frame: window.bounds)
+        protectedView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        protectedView.isUserInteractionEnabled = false
+        protectedView.setPlaceholderText(screenRecordingWarningMessage)
+
+        window.insertSubview(protectedView, at: 0)
+        protectedView.frame = window.bounds
+        window.layoutIfNeeded()
+
+        guard protectedView.activateSecureCanvas() else {
+            protectedView.removeFromSuperview()
+            if isDebugMode {
+                print("AppSecurityLock: Secure anchor unavailable, skip screenshot protection")
+            }
+            return
+        }
+
+        protectedView.protectLayer(of: flutterView)
+        screenshotProtectedView = protectedView
+
+        if isDebugMode {
+            print("AppSecurityLock: Screenshot protection enabled (secure field anchor)")
+        }
+    }
+    
+    private func disableScreenshotProtection() {
+        let apply: () -> Void = { [weak self] in
+            guard let self = self else { return }
+            guard let protectedView = self.screenshotProtectedView else { return }
+
+            if let window = self.getKeyWindow(),
+               let flutterView = window.rootViewController?.view {
+                protectedView.restoreProtectedLayer(to: window, contentView: flutterView)
+            }
+
+            protectedView.removeFromSuperview()
+            self.screenshotProtectedView = nil
+
+            if self.isDebugMode {
+                print("AppSecurityLock: Screenshot protection disabled")
+            }
+        }
+        
+        if Thread.isMainThread {
+            apply()
+        } else {
+            DispatchQueue.main.async(execute: apply)
+        }
+    }
+    
+    /// 注册录屏通知；开启时不弹遮罩，截屏后也不弹遮罩
     private func setupScreenRecordingProtection() {
-        // 录屏状态变化通知
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleScreenRecordingChange),
             name: UIScreen.capturedDidChangeNotification,
             object: nil
         )
-        
-        // 注意：不在这里添加 willEnterForegroundNotification 观察者
-        // 因为 startListen() 已经添加了，我们可以在 onEnterForeground 中调用 checkScreenRecording()
-        // 这样可以避免重复观察和清理时的冲突
-        
-        // 立即检查当前状态
         checkScreenRecording()
         
         if isDebugMode {
-            print("AppSecurityLock: Screen recording protection setup completed")
+            print("AppSecurityLock: Listening for screen recording notifications")
         }
     }
     
-    /// 移除屏幕录制保护
     private func removeScreenRecordingProtection() {
         NotificationCenter.default.removeObserver(
             self,
             name: UIScreen.capturedDidChangeNotification,
             object: nil
         )
-        
-        // 注意：不在这里移除 willEnterForegroundNotification 观察者
-        // 因为它是在 startListen() 中添加的，用于其他功能
-        
-        // 隐藏覆盖视图（使用异步，但确保安全）
         hideSecurityOverlay()
         
         if isDebugMode {
-            print("AppSecurityLock: Screen recording protection removed")
+            print("AppSecurityLock: Stopped screen recording notification listeners")
         }
     }
     
-    /// 处理屏幕录制状态变化
     @objc private func handleScreenRecordingChange() {
         checkScreenRecording()
     }
     
-    /// 检查屏幕录制状态
     @objc private func checkScreenRecording() {
-        if isScreenRecordingProtectionEnabled {
-            if UIScreen.main.isCaptured {
-                showSecurityOverlay()
-            } else {
-                hideSecurityOverlay()
-            }
+        guard isScreenRecordingProtectionEnabled else {
+            hideSecurityOverlay()
+            return
+        }
+        
+        if UIScreen.main.isCaptured {
+            showSecurityOverlay()
+        } else {
+            hideSecurityOverlay()
         }
     }
     
-    /// 显示安全覆盖视图
     private func showSecurityOverlay() {
-        // 确保在主线程执行
         if Thread.isMainThread {
             performShowSecurityOverlay()
         } else {
@@ -783,32 +857,59 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         }
     }
     
-    /// 执行显示安全覆盖视图（必须在主线程调用）
+    /// 录屏时用独立 UIWindow 显示 warningMessage（不进入 secure 层，文案可见）
     private func performShowSecurityOverlay() {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first else { return }
-        
-        if securityOverlay == nil {
-            securityOverlay = SecurityOverlayView(
-                frame: window.bounds,
-                warningMessage: screenRecordingWarningMessage
-            )
-            securityOverlay?.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        guard let scene = getActiveWindowScene() else {
+            if isDebugMode {
+                print("AppSecurityLock: No window scene for security overlay")
+            }
+            return
         }
         
-        if let overlay = securityOverlay, overlay.superview == nil {
-            window.addSubview(overlay)
-            window.bringSubviewToFront(overlay)
+        let appWindow = getKeyWindow()
+        
+        let overlayWindow: UIWindow
+        if let existing = securityOverlayWindow {
+            overlayWindow = existing
+        } else {
+            let window = UIWindow(windowScene: scene)
+            window.frame = scene.coordinateSpace.bounds
+            window.windowLevel = .alert + 100
+            window.backgroundColor = .clear
+            window.isHidden = true
+            securityOverlayWindow = window
+            overlayWindow = window
+        }
+        
+        if securityOverlay == nil {
+            let overlay = SecurityOverlayView(
+                frame: overlayWindow.bounds,
+                warningMessage: screenRecordingWarningMessage
+            )
+            overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            securityOverlay = overlay
+            let host = UIViewController()
+            host.view.backgroundColor = .clear
+            host.view.addSubview(overlay)
+            overlayWindow.rootViewController = host
+        } else {
+            securityOverlay?.updateWarningMessage(screenRecordingWarningMessage)
+            securityOverlay?.frame = overlayWindow.bounds
+        }
+        
+        overlayWindow.frame = scene.coordinateSpace.bounds
+        overlayWindow.isHidden = false
+        overlayWindow.makeKeyAndVisible()
+        if let appWindow = appWindow, appWindow !== overlayWindow {
+            appWindow.makeKey()
         }
         
         if isDebugMode {
-            print("AppSecurityLock: Security overlay shown")
+            print("AppSecurityLock: Security overlay shown with message: \(screenRecordingWarningMessage)")
         }
     }
     
-    /// 隐藏安全覆盖视图
     private func hideSecurityOverlay() {
-        // 确保在主线程执行
         if Thread.isMainThread {
             performHideSecurityOverlay()
         } else {
@@ -818,11 +919,8 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         }
     }
     
-    /// 执行隐藏安全覆盖视图（必须在主线程调用）
     private func performHideSecurityOverlay() {
-        if let overlay = securityOverlay, overlay.superview != nil {
-            overlay.removeFromSuperview()
-        }
+        securityOverlayWindow?.isHidden = true
         
         if isDebugMode {
             print("AppSecurityLock: Security overlay hidden")
@@ -832,82 +930,230 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
 
 // MARK: - 安全覆盖视图（防止录屏内容泄露）
 
-/// 自定义安全覆盖视图（拦截触摸+模糊效果）
+/// 自定义安全覆盖视图（拦截触摸 + 暗色模糊 + 警告文案）
 class SecurityOverlayView: UIView {
+    private let dimView: UIView
     private let blurView: UIVisualEffectView
     private let warningLabel: UILabel
     
     override init(frame: CGRect) {
-        // 设置模糊背景
-        let blurEffect = UIBlurEffect(style: .systemThickMaterial)
+        dimView = UIView()
+        let blurEffect = UIBlurEffect(style: .systemThickMaterialDark)
         blurView = UIVisualEffectView(effect: blurEffect)
-        blurView.frame = CGRect(origin: .zero, size: frame.size)
-        
-        // 设置警告标签
         warningLabel = UILabel()
         warningLabel.text = "屏幕正在被录制"
-        warningLabel.textColor = UIColor.red
-        warningLabel.textAlignment = .center
-        warningLabel.numberOfLines = 0
-        warningLabel.font = UIFont.boldSystemFont(ofSize: 20)
-        
         super.init(frame: frame)
-        
-        self.backgroundColor = UIColor.clear
-        
-        // 添加子视图
-        blurView.contentView.addSubview(warningLabel)
-        addSubview(blurView)
-        
-        // 设置标签约束
-        warningLabel.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            warningLabel.centerXAnchor.constraint(equalTo: blurView.contentView.centerXAnchor),
-            warningLabel.centerYAnchor.constraint(equalTo: blurView.contentView.centerYAnchor),
-            warningLabel.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 20),
-            warningLabel.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -20)
-        ])
+        commonInit()
     }
     
     init(frame: CGRect, warningMessage: String) {
-        // 设置模糊背景
-        let blurEffect = UIBlurEffect(style: .systemThickMaterial)
+        dimView = UIView()
+        let blurEffect = UIBlurEffect(style: .systemThickMaterialDark)
         blurView = UIVisualEffectView(effect: blurEffect)
-        blurView.frame = CGRect(origin: .zero, size: frame.size)
-        
-        // 设置警告标签
         warningLabel = UILabel()
         warningLabel.text = warningMessage
-        warningLabel.textColor = UIColor.red
+        super.init(frame: frame)
+        commonInit()
+    }
+    
+    private func commonInit() {
+        backgroundColor = .clear
+        
+        dimView.backgroundColor = UIColor.black.withAlphaComponent(0.72)
+        dimView.frame = bounds
+        dimView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        
+        blurView.frame = bounds
+        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        
+        warningLabel.textColor = .white
         warningLabel.textAlignment = .center
         warningLabel.numberOfLines = 0
-        warningLabel.font = UIFont.boldSystemFont(ofSize: 20)
+        warningLabel.font = UIFont.boldSystemFont(ofSize: 22)
         
-        super.init(frame: frame)
-        
-        self.backgroundColor = UIColor.clear
-        
-        // 添加子视图
-        blurView.contentView.addSubview(warningLabel)
+        addSubview(dimView)
         addSubview(blurView)
+        blurView.contentView.addSubview(warningLabel)
         
-        // 设置标签约束
         warningLabel.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             warningLabel.centerXAnchor.constraint(equalTo: blurView.contentView.centerXAnchor),
             warningLabel.centerYAnchor.constraint(equalTo: blurView.contentView.centerYAnchor),
-            warningLabel.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 20),
-            warningLabel.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -20)
+            warningLabel.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 24),
+            warningLabel.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -24)
         ])
+    }
+    
+    func updateWarningMessage(_ message: String) {
+        warningLabel.text = message
     }
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     
-    // 拦截所有触摸事件
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        // 返回自身表示拦截所有触摸事件
         return self
+    }
+}
+
+
+// MARK: - 截图保护（占位层在下 + UITextField 内部 secure sublayer）
+
+/// 不要把 secure canvas UIView 拆出来再 addSubview——Flutter 会黑屏。
+/// 正确：保留 UITextField 完整层级，把 content.layer 挂到其内部 secure sublayer。
+/// 占位层在同一父视图更低 z-index，截图时 secure 被跳过、占位层浮现。
+class ScreenshotProtectedView: UIView {
+
+    private let secureField = UITextField()
+    private var secureAnchor: CALayer?
+    private let placeholderView = UIView()
+    private weak var protectedContentView: UIView?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupPlaceholder()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupPlaceholder()
+    }
+
+    private func setupPlaceholder() {
+        // 与 SecurityOverlayView 同视觉：暗色遮罩 + 模糊 + 居中 warning 文案
+        placeholderView.backgroundColor = .clear
+        insertSubview(placeholderView, at: 0)
+        placeholderView.frame = bounds
+        placeholderView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+
+        let dimView = UIView()
+        dimView.backgroundColor = UIColor.black.withAlphaComponent(0.72)
+        dimView.frame = placeholderView.bounds
+        dimView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        placeholderView.addSubview(dimView)
+
+        let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThickMaterialDark))
+        blurView.frame = placeholderView.bounds
+        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        placeholderView.addSubview(blurView)
+
+        let label = UILabel()
+        label.text = "屏幕正在被录制"
+        label.textColor = .white
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.font = UIFont.boldSystemFont(ofSize: 22)
+        blurView.contentView.addSubview(label)
+
+        label.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: blurView.contentView.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: blurView.contentView.centerYAnchor),
+            label.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 24),
+            label.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -24),
+        ])
+    }
+
+    @discardableResult
+    func activateSecureCanvas() -> Bool {
+        if secureAnchor != nil { return true }
+        return setupSecureLayer()
+    }
+
+    @discardableResult
+    private func setupSecureLayer() -> Bool {
+        secureField.isSecureTextEntry = true
+        secureField.isUserInteractionEnabled = false
+        secureField.backgroundColor = .clear
+        secureField.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(secureField)
+        NSLayoutConstraint.activate([
+            secureField.topAnchor.constraint(equalTo: topAnchor),
+            secureField.leadingAnchor.constraint(equalTo: leadingAnchor),
+            secureField.trailingAnchor.constraint(equalTo: trailingAnchor),
+            secureField.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        setNeedsLayout()
+        layoutIfNeeded()
+
+        let sublayers = secureField.layer.sublayers ?? []
+        // 关键：不拆 canvas UIView，只保留内部 secure CALayer 作挂载点
+        if #available(iOS 17.0, *) {
+            secureAnchor = sublayers.last ?? sublayers.first
+        } else {
+            secureAnchor = sublayers.first ?? sublayers.last
+        }
+        return secureAnchor != nil
+    }
+
+    var hasSecureCanvas: Bool { secureAnchor != nil }
+    var isPlaceholderAboveCanvas: Bool { false }
+    var secureCanvasBounds: CGRect { bounds }
+    var secureCanvasSubviewCount: Int { 0 }
+
+    var isFlutterLayerInSecureCanvas: Bool {
+        guard let content = protectedContentView, let anchor = secureAnchor else { return false }
+        return content.layer.superlayer === anchor
+    }
+
+    func debugCanvasInfo() -> [String: Any] {
+        let sublayers = secureField.layer.sublayers ?? []
+        return [
+            "hasSecureAnchor": secureAnchor != nil,
+            "sublayerCount": sublayers.count,
+            "extractedCanvasView": false,
+            "viewBounds": "\(bounds)",
+            "inWindow": window != nil,
+        ]
+    }
+
+    func ensurePlaceholderBehindCanvas() {
+        insertSubview(placeholderView, at: 0)
+        if secureField.superview === self {
+            bringSubviewToFront(secureField)
+        }
+    }
+
+    func protectLayer(of view: UIView) {
+        guard let secureAnchor else { return }
+        protectedContentView = view
+        ensurePlaceholderBehindCanvas()
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        secureAnchor.addSublayer(view.layer)
+        view.layer.frame = bounds
+        CATransaction.commit()
+    }
+
+    func restoreProtectedLayer(to window: UIWindow, contentView: UIView) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        window.layer.insertSublayer(contentView.layer, at: 0)
+        contentView.layer.frame = window.bounds
+        CATransaction.commit()
+        protectedContentView = nil
+    }
+
+    func setPlaceholderText(_ text: String) {
+        // dim + blur + label；label 在 blur.contentView 里
+        func findLabel(in view: UIView) -> UILabel? {
+            if let label = view as? UILabel { return label }
+            for child in view.subviews {
+                if let found = findLabel(in: child) { return found }
+            }
+            return nil
+        }
+        findLabel(in: placeholderView)?.text = text
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        placeholderView.frame = bounds
+        if let content = protectedContentView,
+           content.layer.superlayer === secureAnchor {
+            content.layer.frame = bounds
+        }
     }
 }

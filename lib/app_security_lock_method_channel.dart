@@ -167,7 +167,7 @@ class MethodChannelAppSecurityLock extends AppSecurityLockPlatform {
     methodChannel.invokeMethod('restartTouchTimer');
   }
 
-  /// 启用/禁用录屏防护
+  /// 启用/禁用截屏与录屏防护
   @override
   Future<void> setScreenRecordingProtectionEnabled(
     bool enabled, {

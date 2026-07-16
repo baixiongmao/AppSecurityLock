@@ -283,11 +283,11 @@ class _MyAppState extends State<MyApp> {
 | `touchTimeout(double)` | Set touch timeout (seconds) |
 | `resetTouchTimer()` | Reset the inactivity timer |
 
-### Screen Recording Protection (New in v0.3.0)
+### Screenshot & Screen Recording Protection (v0.3.0+)
 
 | Method | Description |
 |--------|-------------|
-| `screenRecordingProtectionEnabled(bool, {String? warningMessage})` | Enable/disable screen recording protection with optional custom warning message |
+| `screenRecordingProtectionEnabled(bool, {String? warningMessage})` | Enable/disable screenshot and screen recording protection; optional iOS warning message |
 
 ## Migration from v0.1.x
 
@@ -306,34 +306,35 @@ _lock
 await _lock.backgroundTimeout(30.0);
 ```
 
-## Screen Recording Protection (New in v0.3.0)
+## Screenshot & Screen Recording Protection (v0.3.0+)
 
-Protect your app from unwanted screen recordings with built-in protection and customizable warning messages.
+One API for capture protection.
 
 ### Features
 
-- **Prevent Screen Recording**: Blocks screen recording attempts on both iOS and Android
-- **Custom Warning Messages**: Display custom warning text when recording is detected (iOS)
-- **Security Overlay**: Shows a blurred overlay with warning when screen recording starts (iOS)
-- **Touch Event Blocking**: Prevents recorded interactions from being captured (iOS)
+- **Android**: Blocks screenshots and screen recording (`FLAG_SECURE`)
+- **iOS**: Enabling protection does **not** show a mask immediately
+- **iOS screenshots**: Silent secure protection; the saved photo shows the behind-layer `warningMessage` placeholder (no in-app popup after screenshot)
+- **iOS recording**: Full-screen overlay with `warningMessage` only while screen recording/mirroring is active
+- **Touch Event Blocking**: Prevents interactions while the iOS recording overlay is shown
 
 ### Basic Usage
 
 ```dart
-// Enable screen recording protection
+// Block screenshots and screen recording
 await _lock.screenRecordingProtectionEnabled(true);
 
-// Enable with custom warning message (shows on iOS)
+// Enable with custom warning message (iOS overlay when recording)
 await _lock.screenRecordingProtectionEnabled(
   true,
   warningMessage: '⚠️ Screen recording detected, this operation is blocked',
 );
 
-// Disable screen recording protection
+// Allow screenshots and screen recording
 await _lock.screenRecordingProtectionEnabled(false);
 ```
 
-### Disable screen recording on the specified page
+### Disable protection on a specific page
 ```dart
 class AppPage extends StatefulWidget {
   const AppPage({super.key});
@@ -379,13 +380,12 @@ await _lock
 ### Platform-Specific Behavior
 
 **iOS:**
-- Monitors `UIScreen.capturedDidChangeNotification` for screen recording status changes
-- When recording is detected, displays a full-screen blurred overlay with your custom warning message
-- All touch events are intercepted and blocked during recording
-- Overlay is automatically hidden when recording stops
+- Screenshot: secure `UITextField` blanking + behind-layer `warningMessage` placeholder in the capture (no in-app overlay after screenshot)
+- Recording: high-level overlay window shows `warningMessage` while the screen is being captured
+- Touch events are blocked while the recording overlay is shown
 
 **Android:**
-- Uses `WindowManager.LayoutParams.FLAG_SECURE` to prevent app content from appearing in screen recordings
+- Uses `WindowManager.LayoutParams.FLAG_SECURE` to block both screenshots and screen recordings
 - The system prevents the app window from being captured at the OS level
 - No visible warning needed as the content is automatically protected
 
@@ -411,7 +411,7 @@ class _MyAppState extends State<MyApp> {
       debug: true,
     );
 
-    // Enable screen recording protection
+    // Enable screenshot and screen recording protection
     _setupScreenRecordingProtection();
   }
 
@@ -445,14 +445,14 @@ class _MyAppState extends State<MyApp> {
 - Uses `protectedData` notifications for reliable screen lock detection
 - Supports background timeout with timers
 - Touch detection via gesture recognizers
-- Screen recording protection via `UIScreen.capturedDidChangeNotification` with blurred security overlay
+- Screenshot blanking via secure `UITextField` layer; recording overlay via high-level window + `warningMessage`
 
 ### Android
 - Uses `Application.ActivityLifecycleCallbacks`
 - Monitors screen state with broadcast receivers (`ACTION_SCREEN_OFF`, `ACTION_SCREEN_ON`, `ACTION_USER_PRESENT`)
 - Supports background timeout with handlers
 - Touch detection via Window.Callback
-- Screen recording protection via `WindowManager.LayoutParams.FLAG_SECURE`
+- Screenshot and screen recording protection via `WindowManager.LayoutParams.FLAG_SECURE`
 
 ## License
 

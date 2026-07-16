@@ -1,3 +1,10 @@
+## 0.3.4
+- iOS：开启截屏/录屏防护不再立刻弹遮罩；平时界面保持正常
+- iOS 截屏：secure `UITextField` 静默保护，相册截图显示与录屏一致的暗色模糊 + `warningMessage` 占位（应用内不弹层）
+- iOS 录屏：录屏/镜像进行中显示全屏 `warningMessage` 遮罩
+- Android：`FLAG_SECURE` 同时拦截截屏与录屏
+- 文档与示例文案更新为「禁止截屏/录屏」
+
 ## 0.3.3
 修复了一些问题
 

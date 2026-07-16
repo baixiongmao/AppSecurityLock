@@ -261,14 +261,14 @@ class _MyAppState extends State<MyApp> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Screen Recording Protection:',
+                          'Screenshot & Recording Protection:',
                           style: TextStyle(
                               fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Text('禁止录屏:'),
+                            const Text('禁止截屏/录屏:'),
                             Switch(
                                 value: isScreenRecordingProtected,
                                 onChanged: (value) async {
@@ -277,9 +277,9 @@ class _MyAppState extends State<MyApp> {
                                   await _appSecurityLock
                                       .screenRecordingProtectionEnabled(
                                     value,
-                                    warningMessage: '⚠️ 检测到屏幕录制，该操作已被阻止',
+                                    warningMessage: '⚠️ 检测到屏幕录制和截屏操作，该操作已被阻止',
                                   );
-                                  _addLog('录屏防护已${value ? '启用' : '禁用'}');
+                                  _addLog('截屏/录屏防护已${value ? '启用' : '禁用'}');
                                 }),
                           ],
                         ),

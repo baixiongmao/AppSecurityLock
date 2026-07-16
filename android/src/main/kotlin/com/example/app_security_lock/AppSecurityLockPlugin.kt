@@ -885,35 +885,35 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     // MARK: - 录屏防护方法
     
-    /// 设置录屏防护
+    /// 设置截屏与录屏防护
     /// [warningMessage] 可选的警告文本参数（供iOS使用）
+    /// Android 通过 FLAG_SECURE 同时禁止截屏与屏幕录制
     private fun setScreenRecordingProtectionEnabled(enabled: Boolean, warningMessage: String? = null) {
         isScreenRecordingProtectionEnabled = enabled
         
         activity?.let { act ->
             try {
                 if (enabled) {
-                    // 启用录屏防护：禁止对窗口内容进行录屏
-                    // 在Android中，可以通过FLAG_SECURE标志禁止屏幕录制
+                    // 启用防护：FLAG_SECURE 禁止截屏与录屏
                     act.window.setFlags(
                         android.view.WindowManager.LayoutParams.FLAG_SECURE,
                         android.view.WindowManager.LayoutParams.FLAG_SECURE
                     )
                     
                     if (debug) {
-                        Log.d(TAG, "Screen recording protection enabled")
+                        Log.d(TAG, "Screenshot and screen recording protection enabled")
                         if (warningMessage != null) {
                             Log.d(TAG, "Warning message: $warningMessage")
                         }
                     }
                 } else {
-                    // 禁用录屏防护：移除FLAG_SECURE标志
+                    // 禁用防护：移除 FLAG_SECURE，允许截屏与录屏
                     act.window.clearFlags(
                         android.view.WindowManager.LayoutParams.FLAG_SECURE
                     )
                     
                     if (debug) {
-                        Log.d(TAG, "Screen recording protection disabled")
+                        Log.d(TAG, "Screenshot and screen recording protection disabled")
                     }
                 }
             } catch (e: Exception) {

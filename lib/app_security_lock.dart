@@ -158,12 +158,16 @@ class AppSecurityLock {
     return this;
   }
 
-  // ============ 录屏防护设置 ============
+  // ============ 截屏/录屏防护设置 ============
 
-  /// 启用/禁用录屏防护
+  /// 启用/禁用截屏与录屏防护
   ///
-  /// 启用后，将禁止对应用进行屏幕录制
-  /// [warningMessage] 屏幕录制时显示的警告文本，默认为"屏幕正在被录制"
+  /// 启用后（开启开关本身不会立刻弹遮罩）：
+  /// - Android：`FLAG_SECURE` 拦截截屏与录屏
+  /// - iOS 截屏：静默 secure 保护，截图中显示底层 [warningMessage] 占位文案（平时界面正常）
+  /// - iOS 录屏：系统录屏/镜像进行中显示全屏遮罩
+  ///
+  /// [warningMessage] iOS 占位/录屏遮罩文案，默认为"屏幕正在被录制"
   Future<AppSecurityLock> screenRecordingProtectionEnabled(
     bool enabled, {
     String? warningMessage,
