@@ -678,7 +678,10 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             object: nil
         )
         
-        disableScreenshotProtection()
+        // 进程退出时勿调用 disableScreenshotProtection()：其 [weak self] 会在 dealloc 中 fatal
+        // 此时 Flutter 引擎/窗口已在销毁，无需恢复 layer，只释放引用即可
+        screenshotProtectedView?.removeFromSuperview()
+        screenshotProtectedView = nil
         
         securityOverlayWindow?.isHidden = true
         securityOverlayWindow = nil
@@ -777,6 +780,8 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         }
     }
     
+    /// 关闭截屏保护并恢复 Flutter layer（正常禁用路径）
+    /// 注意：deinit 中禁止调用本方法（内部 [weak self] 会在 dealloc 时崩溃）
     private func disableScreenshotProtection() {
         let apply: () -> Void = { [weak self] in
             guard let self = self else { return }

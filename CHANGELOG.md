@@ -1,3 +1,7 @@
+## 0.3.5
+- iOS：修复从多任务清理应用时崩溃（`deinit` 中调用带 `[weak self]` 的截屏保护清理会触发 `objc_fatal`）
+- iOS：进程退出时改为同步释放截屏保护引用，不再恢复 layer
+
 ## 0.3.4
 - iOS：开启截屏/录屏防护不再立刻弹遮罩；平时界面保持正常
 - iOS 截屏：secure `UITextField` 静默保护，相册截图显示与录屏一致的暗色模糊 + `warningMessage` 占位（应用内不弹层）
