@@ -1,3 +1,10 @@
+## 0.3.6
+- iOS：修复 `Package.swift` 里 target 的 `path` 指向包根目录之外，导致 `flutter run`/构建报错
+  `target 'app_security_lock' in package 'app_security_lock-0.3.5' is outside the package root`
+  （启用了 Swift Package Manager 的 Flutter 工程会直接构建失败）
+- iOS：Swift 源码统一移到 `ios/app_security_lock/Sources/app_security_lock/`，CocoaPods 的 `podspec` 和 SPM 的
+  `Package.swift` 现在共用同一份源码，不再各自维护一份
+
 ## 0.3.5
 - iOS：修复从多任务清理应用时崩溃（`deinit` 中调用带 `[weak self]` 的截屏保护清理会触发 `objc_fatal`）
 - iOS：进程退出时改为同步释放截屏保护引用，不再恢复 layer

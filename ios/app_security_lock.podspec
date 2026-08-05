@@ -13,7 +13,9 @@ A comprehensive Flutter plugin for app security features including screen lock d
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Your Company' => 'zxj417870308@gmail.com' }
   s.source           = { :path => '.' }
-  s.source_files = 'Classes/**/*'
+  # 和 Swift Package Manager（app_security_lock/Package.swift）共用同一份源码，
+  # 避免 CocoaPods 和 SPM 各留一份、改一处忘改另一处。
+  s.source_files = 'app_security_lock/Sources/app_security_lock/**/*'
   s.dependency 'Flutter'
   s.platform = :ios, '13.0'
 

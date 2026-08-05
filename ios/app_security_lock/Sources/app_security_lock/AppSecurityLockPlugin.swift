@@ -33,10 +33,10 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     private var touchGestureRecognizer: UITapGestureRecognizer?
     // 平移手势识别器
     private var panGestureRecognizer: UIPanGestureRecognizer?
-    
+
     // 倒计时相关
     private var touchStartTime: Date?
-    
+
     // 录屏/截屏防护相关
     private var isScreenRecordingProtectionEnabled = false
     private var screenshotProtectedView: ScreenshotProtectedView?
@@ -81,15 +81,15 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                     isDebugMode = debug
                 }
             }
-            
+
             // 立即打印 debug 模式状态（用于调试）
             print("AppSecurityLock: Debug mode is \(isDebugMode ? "ENABLED" : "DISABLED")")
-            
+
             // 只在首次调用时启动监听
             if !isListening {
                 startListen()
             }
-            
+
             // 根据配置启动相应的功能
             if isTouchTimeoutEnabled {
                 setupTouchEventListeners()
@@ -113,7 +113,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                 if isDebugMode {
                     print("Flutter: 设置锁定状态为 \(isLocked)")
                 }
-                
+
                 // 如果从解锁状态变为锁定状态，触发手动锁定回调
                 if !wasLocked && enabled {
                     if isDebugMode {
@@ -129,14 +129,14 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                         print("Flutter: 应用已解锁，触发解锁回调")
                     }
                     safeInvokeMethod("onAppUnlocked", arguments: nil)
-                    
+
                     // 解锁后重新启动触摸超时功能（如果启用）
                     if isTouchTimeoutEnabled {
                         setupTouchEventListeners()
                         startTouchTimer()
                     }
                 }
-                
+
                 result(nil)
             } else {
                 result(
@@ -266,7 +266,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             name: UIApplication.protectedDataDidBecomeAvailableNotification,
             object: nil
         )
-        
+
         if isDebugMode {
             print("AppSecurityLock: 屏幕锁定监听器已注册")
         }
@@ -283,7 +283,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                 }
                 return
             }
-            
+
             do {
                 channel.invokeMethod(method, arguments: arguments)
             } catch {
@@ -302,15 +302,15 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         stopAllTimers()
         // 启动触摸定时器
         safeInvokeMethod("onEnterForeground", arguments: nil)
-        
+
         // 注意：不再在进入前台时自动触发解锁回调
         // 应用解锁应该由用户通过 UI 操作手动触发（调用 setLocked(false)）
-        
+
         // 检查录屏状态（如果录屏防护已启用）
         if isScreenRecordingProtectionEnabled {
             checkScreenRecording()
         }
-        
+
         // 重新启动触摸超时功能（如果启用的话）
         if isTouchTimeoutEnabled && !isLocked {
             setupTouchEventListeners()
@@ -323,7 +323,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             print("App 进入后台")
         }
         safeInvokeMethod("onEnterBackground", arguments: nil)
-        
+
         // 开始后台超时任务
         startBackgroundTimeoutTimer()
     }
@@ -333,7 +333,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         if isDebugMode {
             print("AppSecurityLock: 屏幕锁定检测到 - isScreenLockEnabled: \(isScreenLockEnabled), isLocked: \(isLocked)")
         }
-        
+
         // 只有在启用屏幕锁定功能且应用未锁定时才执行锁定
         if isScreenLockEnabled && !isLocked {
             if isDebugMode {
@@ -547,7 +547,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         }
 
         touchStartTime = Date()
-        
+
         if isDebugMode {
             // Debug模式：每秒执行一次以显示倒计时
             touchTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
@@ -561,16 +561,16 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             }
         }
     }
-    
+
     private func handleTouchTimerTick(_ timer: Timer) {
         guard let startTime = touchStartTime else {
             timer.invalidate()
             return
         }
-        
+
         let elapsedTime = Date().timeIntervalSince(startTime)
         let remainingTime = touchTimeout - elapsedTime
-        
+
         if remainingTime <= 0 {
             // 超时，执行锁定逻辑
             timer.invalidate()
@@ -645,7 +645,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
         // 清理资源 - 直接同步清理，避免异步操作
         stopAllTimers()
         removeTouchEventListeners()
-        
+
         // 移除所有观察者
         if isListening {
             NotificationCenter.default.removeObserver(
@@ -670,30 +670,30 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             )
             isListening = false
         }
-        
+
         // 直接清理录屏/截屏防护相关资源，不使用异步操作
         NotificationCenter.default.removeObserver(
             self,
             name: UIScreen.capturedDidChangeNotification,
             object: nil
         )
-        
+
         // 进程退出时勿调用 disableScreenshotProtection()：其 [weak self] 会在 dealloc 中 fatal
         // 此时 Flutter 引擎/窗口已在销毁，无需恢复 layer，只释放引用即可
         screenshotProtectedView?.removeFromSuperview()
         screenshotProtectedView = nil
-        
+
         securityOverlayWindow?.isHidden = true
         securityOverlayWindow = nil
         securityOverlay = nil
-        
+
         lifecycleChannel = nil
         touchGestureRecognizer = nil
         panGestureRecognizer = nil
     }
 
     // MARK: - 录屏/截屏防护方法
-    
+
     /// 设置录屏与截屏防护
     ///
     /// - 开启时：静默启用 secure 保护（截图露出底层占位文案，平时界面正常）
@@ -701,13 +701,13 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
     /// - 截屏后不再弹遮罩
     private func setScreenRecordingProtectionEnabled(_ enabled: Bool, warningMessage: String? = nil) {
         isScreenRecordingProtectionEnabled = enabled
-        
+
         if let message = warningMessage {
             screenRecordingWarningMessage = message
             screenshotProtectedView?.setPlaceholderText(message)
             securityOverlay?.updateWarningMessage(message)
         }
-        
+
         let run: () -> Void = { [weak self] in
             guard let self = self else { return }
             if enabled {
@@ -718,25 +718,25 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                 self.disableScreenshotProtection()
             }
         }
-        
+
         if Thread.isMainThread {
             run()
         } else {
             DispatchQueue.main.sync(execute: run)
         }
     }
-    
+
     private func getKeyWindow() -> UIWindow? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         return scenes.flatMap { $0.windows }.first { $0.isKeyWindow }
             ?? scenes.flatMap { $0.windows }.first
     }
-    
+
     private func getActiveWindowScene() -> UIWindowScene? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         return scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
     }
-    
+
     /// 启用截屏保护（Flutter 可用方案）：
     /// - 不把 secure canvas UIView 拆出来 addSubview（那会导致 Flutter 黑屏）
     /// - 保留 UITextField 在层级中，把 flutter.layer 挂到 field 内部 secure sublayer
@@ -779,7 +779,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             print("AppSecurityLock: Screenshot protection enabled (secure field anchor)")
         }
     }
-    
+
     /// 关闭截屏保护并恢复 Flutter layer（正常禁用路径）
     /// 注意：deinit 中禁止调用本方法（内部 [weak self] 会在 dealloc 时崩溃）
     private func disableScreenshotProtection() {
@@ -799,14 +799,14 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
                 print("AppSecurityLock: Screenshot protection disabled")
             }
         }
-        
+
         if Thread.isMainThread {
             apply()
         } else {
             DispatchQueue.main.async(execute: apply)
         }
     }
-    
+
     /// 注册录屏通知；开启时不弹遮罩，截屏后也不弹遮罩
     private func setupScreenRecordingProtection() {
         NotificationCenter.default.addObserver(
@@ -816,12 +816,12 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             object: nil
         )
         checkScreenRecording()
-        
+
         if isDebugMode {
             print("AppSecurityLock: Listening for screen recording notifications")
         }
     }
-    
+
     private func removeScreenRecordingProtection() {
         NotificationCenter.default.removeObserver(
             self,
@@ -829,29 +829,29 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             object: nil
         )
         hideSecurityOverlay()
-        
+
         if isDebugMode {
             print("AppSecurityLock: Stopped screen recording notification listeners")
         }
     }
-    
+
     @objc private func handleScreenRecordingChange() {
         checkScreenRecording()
     }
-    
+
     @objc private func checkScreenRecording() {
         guard isScreenRecordingProtectionEnabled else {
             hideSecurityOverlay()
             return
         }
-        
+
         if UIScreen.main.isCaptured {
             showSecurityOverlay()
         } else {
             hideSecurityOverlay()
         }
     }
-    
+
     private func showSecurityOverlay() {
         if Thread.isMainThread {
             performShowSecurityOverlay()
@@ -861,7 +861,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             }
         }
     }
-    
+
     /// 录屏时用独立 UIWindow 显示 warningMessage（不进入 secure 层，文案可见）
     private func performShowSecurityOverlay() {
         guard let scene = getActiveWindowScene() else {
@@ -870,9 +870,9 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             }
             return
         }
-        
+
         let appWindow = getKeyWindow()
-        
+
         let overlayWindow: UIWindow
         if let existing = securityOverlayWindow {
             overlayWindow = existing
@@ -885,7 +885,7 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             securityOverlayWindow = window
             overlayWindow = window
         }
-        
+
         if securityOverlay == nil {
             let overlay = SecurityOverlayView(
                 frame: overlayWindow.bounds,
@@ -901,19 +901,19 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             securityOverlay?.updateWarningMessage(screenRecordingWarningMessage)
             securityOverlay?.frame = overlayWindow.bounds
         }
-        
+
         overlayWindow.frame = scene.coordinateSpace.bounds
         overlayWindow.isHidden = false
         overlayWindow.makeKeyAndVisible()
         if let appWindow = appWindow, appWindow !== overlayWindow {
             appWindow.makeKey()
         }
-        
+
         if isDebugMode {
             print("AppSecurityLock: Security overlay shown with message: \(screenRecordingWarningMessage)")
         }
     }
-    
+
     private func hideSecurityOverlay() {
         if Thread.isMainThread {
             performHideSecurityOverlay()
@@ -923,10 +923,10 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             }
         }
     }
-    
+
     private func performHideSecurityOverlay() {
         securityOverlayWindow?.isHidden = true
-        
+
         if isDebugMode {
             print("AppSecurityLock: Security overlay hidden")
         }
@@ -940,7 +940,7 @@ class SecurityOverlayView: UIView {
     private let dimView: UIView
     private let blurView: UIVisualEffectView
     private let warningLabel: UILabel
-    
+
     override init(frame: CGRect) {
         dimView = UIView()
         let blurEffect = UIBlurEffect(style: .systemThickMaterialDark)
@@ -950,7 +950,7 @@ class SecurityOverlayView: UIView {
         super.init(frame: frame)
         commonInit()
     }
-    
+
     init(frame: CGRect, warningMessage: String) {
         dimView = UIView()
         let blurEffect = UIBlurEffect(style: .systemThickMaterialDark)
@@ -960,26 +960,26 @@ class SecurityOverlayView: UIView {
         super.init(frame: frame)
         commonInit()
     }
-    
+
     private func commonInit() {
         backgroundColor = .clear
-        
+
         dimView.backgroundColor = UIColor.black.withAlphaComponent(0.72)
         dimView.frame = bounds
         dimView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        
+
         blurView.frame = bounds
         blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        
+
         warningLabel.textColor = .white
         warningLabel.textAlignment = .center
         warningLabel.numberOfLines = 0
         warningLabel.font = UIFont.boldSystemFont(ofSize: 22)
-        
+
         addSubview(dimView)
         addSubview(blurView)
         blurView.contentView.addSubview(warningLabel)
-        
+
         warningLabel.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             warningLabel.centerXAnchor.constraint(equalTo: blurView.contentView.centerXAnchor),
@@ -988,15 +988,15 @@ class SecurityOverlayView: UIView {
             warningLabel.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -24)
         ])
     }
-    
+
     func updateWarningMessage(_ message: String) {
         warningLabel.text = message
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         return self
     }

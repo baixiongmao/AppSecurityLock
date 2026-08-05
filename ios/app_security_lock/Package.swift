@@ -19,13 +19,12 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "app_security_lock",
-            dependencies: [],
-            path: "..",
-            sources: [
-                "Classes"
-            ],
-            publicHeadersPath: "Classes"
+            // 目标名要跟 podspec 里的 s.name 保持一致，Flutter 工具靠这个名字识别插件。
+            // 不再手写 path/sources 指到包根目录之外（这是之前报错的原因：
+            // "target 'app_security_lock' in package 'app_security_lock-0.3.5' is outside the package root"，
+            // SPM 不允许 target 的源码目录跑到 Package.swift 所在目录（包根）之外）。
+            // 直接用 SPM 默认约定 Sources/<target name>/ 即可，源码见 ./Sources/app_security_lock/。
+            name: "app_security_lock"
         )
     ]
 )
