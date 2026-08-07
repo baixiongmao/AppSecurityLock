@@ -5,12 +5,22 @@ import PackageDescription
 
 let package = Package(
     name: "app_security_lock",
+    // 代码里大量用到 UIWindowScene / connectedScenes（iOS 13+ 的 UIScene API），
+    // podspec 里 `s.platform = :ios, '13.0'` 也是这么写的，这里要和它保持一致，
+    // 不然 SPM 按更低的部署目标编译会报 "'UIWindowScene' is only available in iOS 13.0 or newer"。
     platforms: [
-        .iOS(.v11)
+        .iOS(.v13)
     ],
     products: [
+        // Flutter 生成的 FlutterGeneratedPluginSwiftPackage 会按照
+        // 「Dart 包名中的下划线换成短横线」这个约定去引用 product，
+        // 所以这里 library 的 name 必须是 "app-security-lock"（带短横线），
+        // 不能直接照抄 Dart 包名 "app_security_lock"（下划线）。
+        // 否则会报：
+        // "product 'app-security-lock' required by package 'fluttergeneratedpluginswiftpackage' ...
+        //  not found in package 'app_security_lock'."
         .library(
-            name: "app_security_lock",
+            name: "app-security-lock",
             targets: ["app_security_lock"]
         )
     ],

@@ -1,9 +1,13 @@
-## 0.3.6
+## 0.3.7
 - iOS：修复 `Package.swift` 里 target 的 `path` 指向包根目录之外，导致 `flutter run`/构建报错
   `target 'app_security_lock' in package 'app_security_lock-0.3.5' is outside the package root`
   （启用了 Swift Package Manager 的 Flutter 工程会直接构建失败）
 - iOS：Swift 源码统一移到 `ios/app_security_lock/Sources/app_security_lock/`，CocoaPods 的 `podspec` 和 SPM 的
   `Package.swift` 现在共用同一份源码，不再各自维护一份
+- iOS：修复 `Package.swift` 里 library product 命名错误（沿用 Dart 包名 `app_security_lock` 下划线），导致构建报错
+  `product 'app-security-lock' required by package 'fluttergeneratedpluginswiftpackage' ... not found in package 'app_security_lock'`。
+  Flutter 生成的 `FlutterGeneratedPluginSwiftPackage` 按「下划线转短横线」的约定引用各插件的 product，
+  现在改成 `app-security-lock`（短横线）
 
 ## 0.3.5
 - iOS：修复从多任务清理应用时崩溃（`deinit` 中调用带 `[weak self]` 的截屏保护清理会触发 `objc_fatal`）
