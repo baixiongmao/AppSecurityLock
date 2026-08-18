@@ -2,7 +2,7 @@ group = "com.example.app_security_lock"
 version = "1.0-SNAPSHOT"
 
 buildscript {
-    ext.kotlin_version = "1.8.22"
+    ext.kotlin_version = "2.1.0"
     repositories {
         google()
         mavenCentral()
@@ -22,7 +22,23 @@ allprojects {
 }
 
 apply plugin: "com.android.library"
-apply plugin: "kotlin-android"
+
+// 兼容 Flutter < 3.44：AGP < 9 仍需自行应用 KGP；AGP 9+ 交给内置 Kotlin。
+// 使用 apply(plugin:) 方法调用，避免 Flutter 静态正则把条件 apply 误判为「插件仍在使用 KGP」。
+// 参考: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+def agpMajor = 0
+try {
+    agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0] as int
+} catch (Throwable ignored) {
+    agpMajor = 0
+}
+def builtInKotlinProp = project.findProperty("android.builtInKotlin")
+def useBuiltInKotlin = builtInKotlinProp != null
+        ? builtInKotlinProp.toString().toBoolean()
+        : agpMajor >= 9
+if (!useBuiltInKotlin) {
+    apply(plugin: "org.jetbrains.kotlin.android")
+}
 
 android {
     namespace = "com.example.app_security_lock"
@@ -32,10 +48,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11
     }
 
     sourceSets {
@@ -62,5 +74,13 @@ android {
                showStandardStreams = true
             }
         }
+    }
+}
+
+// 配置 Kotlin JVM target（KGP 2.0+ / 内置 Kotlin 的 compilerOptions DSL）
+def kotlinAndroidExt = project.extensions.findByType(org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension)
+if (kotlinAndroidExt != null) {
+    kotlinAndroidExt.compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
     }
 }

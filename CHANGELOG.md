@@ -1,3 +1,9 @@
+## 0.3.8
+- Android：迁移到 Flutter Built-in Kotlin，消除 “plugins that apply Kotlin Gradle Plugin (KGP)” 警告。
+  AGP < 9 或 `android.builtInKotlin=false` 时仍应用 KGP（`org.jetbrains.kotlin.android`）以兼容旧工程；AGP 9+ 开启内置 Kotlin 时不再 apply KGP。
+  `kotlinOptions` 改为通过 `KotlinAndroidProjectExtension.compilerOptions` 设置 JVM target，避免无 Kotlin 扩展时出现 `Could not find method kotlin()`；Kotlin 升级到 2.1.0。
+  参考：https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+
 ## 0.3.7
 - iOS：修复 `Package.swift` 里 target 的 `path` 指向包根目录之外，导致 `flutter run`/构建报错
   `target 'app_security_lock' in package 'app_security_lock-0.3.5' is outside the package root`
