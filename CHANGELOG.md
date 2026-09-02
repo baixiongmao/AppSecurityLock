@@ -1,3 +1,5 @@
+## 0.3.9
+Android: screenLock only fires once — stopAllTimers() unregisters the screen-off receiver
 ## 0.3.8
 - Android：迁移到 Flutter Built-in Kotlin，消除 “plugins that apply Kotlin Gradle Plugin (KGP)” 警告。
   AGP < 9 或 `android.builtInKotlin=false` 时仍应用 KGP（`org.jetbrains.kotlin.android`）以兼容旧工程；AGP 9+ 开启内置 Kotlin 时不再 apply KGP。
