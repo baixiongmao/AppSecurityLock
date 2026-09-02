@@ -693,7 +693,6 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private fun stopAllTimers() {
         stopBackgroundTimeoutTimer()
         stopTouchTimeout()
-        stopScreenDetection()
     }
 
     private fun invokeMethod(method: String, arguments: Any?) {
@@ -860,6 +859,7 @@ class AppSecurityLockPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         
         // 清理所有资源
         stopAllTimers()
+        stopScreenDetection()   // 新增：插件真正销毁时才在这里单独注销
         removeTouchListener()
         
         // 禁用录屏防护
