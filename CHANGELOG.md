@@ -1,3 +1,7 @@
+## 0.3.10
+- iOS：修复截屏/录屏防护关闭后，Flutter 根视图没有放回原来的容器。开启防护时 `rootViewController.view` 被挪进 secure 输入框内部，关闭时只是插到了 `window.layer` 最底层，脱离了原来的 `UITransitionView`/`UIDropShadowView`；之后 present 的系统控制器（如 `PHPickerViewController` 相册选择器）布局错乱、点击全部落到背后的遮罩上，表现为点不动、滑不动。现在开启时记录原父视图、层级位置和 frame，关闭时原样放回。
+- iOS: fix the Flutter root view not being returned to its original container after screenshot/recording protection is disabled. It used to be re-inserted at the bottom of `window.layer`, detached from `UITransitionView`/`UIDropShadowView`, which broke later presented system controllers (e.g. `PHPickerViewController`) — touches landed on the dimming view behind them. The original superview, index and frame are now recorded and restored.
+
 ## 0.3.9
 Android: screenLock only fires once — stopAllTimers() unregisters the screen-off receiver
 ## 0.3.8

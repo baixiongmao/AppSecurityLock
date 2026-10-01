@@ -787,8 +787,13 @@ public class AppSecurityLockPlugin: NSObject, FlutterPlugin {
             guard let self = self else { return }
             guard let protectedView = self.screenshotProtectedView else { return }
 
-            if let window = self.getKeyWindow(),
-               let flutterView = window.rootViewController?.view {
+            // 优先用开启保护时记下的 content view 和它所在的 window；key window
+            // 此时可能已经换成了别的（比如录屏遮罩 window）。
+            // Prefer the content view recorded when protection was enabled and
+            // its own window — the key window may be a different one by now
+            // (e.g. the screen-recording overlay window).
+            if let window = protectedView.window ?? self.getKeyWindow(),
+               let flutterView = protectedView.protectedContent ?? window.rootViewController?.view {
                 protectedView.restoreProtectedLayer(to: window, contentView: flutterView)
             }
 
@@ -1015,6 +1020,30 @@ class ScreenshotProtectedView: UIView {
     private let placeholderView = UIView()
     private weak var protectedContentView: UIView?
 
+    // 被保护的 content view 原来的位置，关闭保护时原样放回。
+    // 把 content.layer 挂到 secure sublayer 下时，UIKit 会把它的 superview 也同步
+    // 改成 secure canvas；如果关闭时只是塞回 window.layer 的最底层，content view
+    // 就脱离了原来的容器（iOS 上 rootViewController.view 外面还有
+    // UITransitionView / UIDropShadowView），之后 present 的控制器（比如
+    // PHPicker）布局错乱，触摸全部落到背后的 UIDimmingView 上。
+    //
+    // Where the protected content view originally lived, so disabling puts it
+    // back exactly. Re-parenting content.layer under the secure sublayer makes
+    // UIKit move its superview to the secure canvas too; restoring it to the
+    // bottom of window.layer detached it from its real container (on iOS
+    // rootViewController.view sits inside UITransitionView /
+    // UIDropShadowView), so later presented controllers (e.g. PHPicker) were
+    // mis-laid-out and every touch landed on the UIDimmingView behind them.
+    private weak var originalSuperview: UIView?
+    private var originalIndex: Int = 0
+    private var originalFrame: CGRect = .zero
+    private var originalFilledSuperview = false
+
+    /// 当前被保护的 content view（关闭保护时用它恢复，而不是重新从 key window 推断）
+    /// The currently protected content view (used on restore instead of
+    /// re-deriving it from the key window).
+    var protectedContent: UIView? { protectedContentView }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupPlaceholder()
@@ -1123,6 +1152,14 @@ class ScreenshotProtectedView: UIView {
     func protectLayer(of view: UIView) {
         guard let secureAnchor else { return }
         protectedContentView = view
+        if let superview = view.superview, superview !== self, !superview.isDescendant(of: self) {
+            originalSuperview = superview
+            originalIndex = superview.subviews.firstIndex(of: view) ?? 0
+            originalFrame = view.frame
+            originalFilledSuperview = view.frame == superview.bounds
+        } else {
+            originalSuperview = nil
+        }
         ensurePlaceholderBehindCanvas()
 
         CATransaction.begin()
@@ -1135,10 +1172,22 @@ class ScreenshotProtectedView: UIView {
     func restoreProtectedLayer(to window: UIWindow, contentView: UIView) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        window.layer.insertSublayer(contentView.layer, at: 0)
-        contentView.layer.frame = window.bounds
+        if let superview = originalSuperview, superview.window != nil || superview === window {
+            // 放回原来的容器、原来的层级位置
+            // Put it back into its original container at its original index
+            let index = min(originalIndex, superview.subviews.count)
+            superview.insertSubview(contentView, at: index)
+            contentView.frame = originalFilledSuperview ? superview.bounds : originalFrame
+            superview.setNeedsLayout()
+        } else {
+            // 兜底：原容器已经不在了，退回 window 最底层
+            // Fallback: the original container is gone; use the window's bottom
+            window.insertSubview(contentView, at: 0)
+            contentView.frame = window.bounds
+        }
         CATransaction.commit()
         protectedContentView = nil
+        originalSuperview = nil
     }
 
     func setPlaceholderText(_ text: String) {
